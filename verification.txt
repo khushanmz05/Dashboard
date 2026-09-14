@@ -1,0 +1,26 @@
+REST: seeded data, create/read/delete, missing/invalid/valid token, exact 404 response: PASS.
+Authentication: signup, password hash, login, persistent cookie, private route, removed admin, invalid OAuth state: PASS (HTTP tests; no browser OAuth login).
+Weather success/error output verified with synthetic API responses.
+
+Live weather attempts (2026-09-14 UTC):
+node dashboard-bootstrap/weather.js
+Exit: 0
+Barcelona: 22.8°C
+
+node dashboard-bootstrap/weather.js --city London
+Exit: 0
+London: 18.3°C
+
+node dashboard-bootstrap/weather.js --city Barcelona
+Exit: 0
+Barcelona: 22.8°C
+
+node dashboard-bootstrap/weather.js --city Tokyo
+Exit: 0
+Tokyo: 28.5°C
+
+curl --max-time 12 -sS https://wttr.in/Barcelona?format=3
+Exit: 0
+Barcelona: ☀️  +23°C
+
+Live weather: PASS for the default city and three named cities. Barcelona cross-check: Open-Meteo 22.8 C; wttr.in 23 C (difference 0.2 C). GitHub OAuth requires user-provided credentials and a browser sign-in.
