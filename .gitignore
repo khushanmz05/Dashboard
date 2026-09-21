@@ -1,4 +1,5 @@
 node_modules
+cookies.txt
 data/*.sqlite
 data/*.sqlite-shm
 data/*.sqlite-wal
