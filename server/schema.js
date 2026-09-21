@@ -5,7 +5,17 @@ module.exports = `
     email TEXT NOT NULL UNIQUE,
     password_hash TEXT NOT NULL,
     is_verified INTEGER NOT NULL DEFAULT 0,
+    verification_token TEXT,
+    verification_token_expires_at INTEGER,
     created_at INTEGER NOT NULL DEFAULT (unixepoch())
+  );
+
+  CREATE TABLE IF NOT EXISTS sessions (
+    token_hash TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    expires_at INTEGER NOT NULL,
+    created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
   );
 
   CREATE TABLE IF NOT EXISTS user_services (
