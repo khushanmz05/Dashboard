@@ -1,3 +1,4 @@
+const database = require("./database");
 const http = require("node:http");
 
 const PORT = process.env.PORT || 8080;
@@ -93,8 +94,13 @@ const server = http.createServer((request, response) => {
   const url = new URL(request.url, `http://${request.headers.host}`);
 
   if (request.method === "GET" && url.pathname === "/health") {
-    return sendJson(response, 200, { status: "ok" });
-  }
+  database.prepare("SELECT 1").get();
+
+  return sendJson(response, 200, {
+    status: "ok",
+    database: "connected"
+  });
+}
 
   if (request.method === "GET" && url.pathname === "/about.json") {
     return sendJson(response, 200, {

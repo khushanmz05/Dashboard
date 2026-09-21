@@ -4,5 +4,8 @@
   "private": true,
   "scripts": {
     "start": "node server/index.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.11.1"
   }
 }
