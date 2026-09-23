@@ -1,53 +1,353 @@
 <!doctype html>
 <html lang="en">
   <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Dashboard</title>
-    <link rel="stylesheet" href="/styles.css">
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#202c26" />
+    <meta
+      name="description"
+      content="Your personal space for weather, news and development updates."
+    />
+    <title>Dashboard — Your daily overview</title>
+    <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
-    <main class="shell">
-      <section id="auth-view" class="auth-card">
-        <p class="eyebrow">DASHBOARD_</p>
-        <h1>Built by you. For you.</h1>
-        <p>Sign in to build your personal dashboard.</p>
-        <form id="login-form">
-          <label>Username <input name="username" autocomplete="username" required></label>
-          <label>Password <input name="password" type="password" autocomplete="current-password" required></label>
-          <button>Sign in</button>
-        </form>
-        <details>
-          <summary>Create an account</summary>
-          <form id="register-form">
-            <label>Username <input name="username" required minlength="3"></label>
-            <label>Email <input name="email" type="email" required></label>
-            <label>Password <input name="password" type="password" required minlength="8"></label>
-            <button>Create account</button>
+    <a href="#auth-title" class="skip-link">Skip to content</a>
+    <section id="auth-view" class="auth-layout">
+      <div class="auth-story">
+        <a class="brand" href="/">
+          <span class="brand-mark">d.</span> dashboard<span class="brand-dot"
+            >_</span
+          ></a
+        >
+        <div>
+          <p class="eyebrow">A LITTLE LESS NOISE</p>
+          <h1>Your world.<br />In one place.</h1>
+          <p class="story-copy">
+            The weather outside. The projects you follow.<br />The stories that
+            matter. Make space for all of it.
+          </p>
+          <div class="story-tiles" aria-hidden="true">
+            <div>
+              <span>01 / WEATHER</span
+              ><strong>Stay one step<br />ahead of the day.</strong
+              ><span class="tile-symbol">☀</span>
+            </div>
+            <div>
+              <span>02 / DEVELOPMENT</span
+              ><strong>Keep your<br />projects in sight.</strong
+              ><span class="tile-symbol">⌘</span>
+            </div>
+          </div>
+        </div>
+        <p class="story-footer">BUILT BY YOU. FOR YOU.</p>
+      </div>
+      <main class="auth-main">
+        <div class="auth-card">
+          <p class="eyebrow">YOUR PERSONAL CONTROL PANEL</p>
+          <h2 id="auth-title" tabindex="-1">Welcome back</h2>
+          <p id="auth-subtitle" class="muted">
+            Sign in and pick up where you left off.
+          </p>
+          <div class="auth-tabs" aria-label="Account options">
+            <button type="button" id="show-login" aria-pressed="true">
+              Sign in</button
+            ><button type="button" id="show-register" aria-pressed="false">
+              Create account
+            </button>
+          </div>
+          <form id="login-form">
+            <label
+              >Username<input
+                name="username"
+                autocomplete="username"
+                required
+                placeholder="Your username" /></label
+            ><label
+              >Password<input
+                name="password"
+                type="password"
+                autocomplete="current-password"
+                required
+                placeholder="Your password" /></label
+            ><button class="primary full">
+              Sign in <span aria-hidden="true">↗</span>
+            </button>
           </form>
-        </details>
-        <p id="auth-message" class="message" role="status"></p>
-      </section>
-
-      <section id="dashboard-view" hidden>
-        <header>
-          <div><p class="eyebrow">DASHBOARD_</p><h1>Your space</h1></div>
-          <div class="header-actions"><span id="user-name"></span><button id="logout-button" class="secondary">Log out</button></div>
+          <form id="register-form" hidden>
+            <label
+              >Username<input
+                name="username"
+                autocomplete="username"
+                minlength="3"
+                required
+                placeholder="At least 3 characters" /></label
+            ><label
+              >Email address<input
+                name="email"
+                type="email"
+                autocomplete="email"
+                required
+                placeholder="you@example.com" /></label
+            ><label
+              >Password<input
+                name="password"
+                type="password"
+                autocomplete="new-password"
+                minlength="8"
+                required
+                placeholder="At least 8 characters" /></label
+            ><button class="primary full">
+              Create account <span aria-hidden="true">↗</span>
+            </button>
+          </form>
+          <form id="verify-form" hidden>
+            <div class="notice">
+              Your account is created. Confirm your registration below before
+              signing in. This development server provides the code directly; it
+              does not send an email.
+            </div>
+            <label
+              >Confirmation code<input
+                name="token"
+                autocomplete="off"
+                required /></label
+            ><button class="primary full">Confirm account</button>
+          </form>
+          <button type="button" id="show-verify" class="text-button">
+            Already have a confirmation code?
+          </button>
+          <p id="auth-message" class="form-message" role="status"></p>
+          <p class="auth-footnote">A dashboard that feels like yours.</p>
+        </div>
+      </main>
+    </section>
+    <div id="dashboard-view" class="app-layout" hidden>
+      <aside class="sidebar">
+        <a class="brand" href="/" aria-label="Dashboard home"
+          ><span class="brand-mark">d.</span> dashboard<span class="brand-dot"
+            >_</span
+          ></a
+        >
+        <p class="nav-label">WORKSPACE</p>
+        <nav aria-label="Main navigation">
+          <button
+            data-view="overview"
+            class="nav-item active"
+            aria-current="page"
+          >
+            <span aria-hidden="true">▦</span> Overview</button
+          ><button data-view="services" class="nav-item">
+            <span aria-hidden="true">◈</span> Services
+            <span id="service-count" class="nav-count">3</span></button
+          ><button data-view="account" class="nav-item">
+            <span aria-hidden="true">◎</span> Account
+          </button>
+        </nav>
+        <div class="sidebar-note">
+          <span class="small-dot"></span><strong>Your space, your pace.</strong>
+          <p>Add what matters.<br />Leave the noise behind.</p>
+          <button class="text-button" data-add>Add your first widget ↗</button>
+        </div>
+        <div class="sidebar-user">
+          <span id="user-avatar" class="avatar"></span>
+          <div>
+            <strong id="user-name"></strong><small>Personal workspace</small>
+          </div>
+          <button
+            id="logout-button"
+            class="icon-button"
+            aria-label="Sign out"
+            title="Sign out"
+          >
+            ↪
+          </button>
+        </div>
+      </aside>
+      <main id="main-content" class="workspace" tabindex="-1">
+        <header class="topbar">
+          <span
+            >Workspace <span class="crumb">/</span>
+            <strong id="breadcrumb">Overview</strong></span
+          >
+          <div>
+            <span class="connection"><i></i> Signed in</span
+            ><span id="today"></span>
+          </div>
         </header>
-        <section class="add-panel">
-          <h2>Add a widget</h2>
-          <form id="widget-form">
-            <label>Service <select id="service" required></select></label>
-            <label>Widget <select id="widget" required></select></label>
-            <div id="configuration" class="configuration"></div>
-            <label>Refresh every (seconds) <input id="refresh-rate" type="number" min="10" value="60" required></label>
-            <button>Add widget</button>
-          </form>
-          <p id="dashboard-message" class="message" role="status"></p>
+        <section id="overview-page">
+          <div class="page-heading">
+            <div>
+              <p class="eyebrow">MAKE ROOM FOR WHAT MATTERS</p>
+              <h1>Your daily overview<span class="heading-dot">.</span></h1>
+              <p class="muted">
+                A little perspective on your day, all in one place.
+              </p>
+            </div>
+            <button class="primary" data-add>
+              <span aria-hidden="true">+</span> Add widget
+            </button>
+          </div>
+          <div class="summary-strip">
+            <div>
+              <span class="summary-icon">▦</span>
+              <div>
+                <strong id="widget-count">0</strong
+                ><span>Widgets in your space</span>
+              </div>
+            </div>
+            <div>
+              <span class="summary-icon">◈</span>
+              <div>
+                <strong id="enabled-count">1</strong
+                ><span>Enabled services</span>
+              </div>
+            </div>
+            <div>
+              <span class="summary-icon">↻</span>
+              <div>
+                <strong id="refresh-summary">Automatic</strong
+                ><span>Each widget, its own rhythm</span>
+              </div>
+            </div>
+          </div>
+          <div class="section-toolbar">
+            <div class="filters" aria-label="Filter widgets">
+              <button
+                class="filter active"
+                data-filter="all"
+                aria-pressed="true"
+              >
+                All widgets</button
+              ><button
+                class="filter"
+                data-filter="weather"
+                aria-pressed="false"
+              >
+                Weather</button
+              ><button class="filter" data-filter="github" aria-pressed="false">
+                GitHub</button
+              ><button class="filter" data-filter="rss" aria-pressed="false">
+                RSS
+              </button>
+            </div>
+            <button id="refresh-all" class="text-button">↻ Refresh all</button>
+          </div>
+          <p id="dashboard-message" class="form-message" role="status"></p>
+          <div id="widget-grid" class="widget-grid"></div>
+          <footer class="workspace-footer">
+            <span>Thoughtfully collected. Uniquely yours.</span
+            ><span>DASHBOARD_</span>
+          </footer>
         </section>
-        <section><h2>Your widgets</h2><div id="widget-grid" class="widget-grid"></div></section>
-      </section>
-    </main>
-    <script src="/app.js" defer></script>
+        <section id="services-page" hidden>
+          <div class="page-heading">
+            <div>
+              <p class="eyebrow">CONNECT YOUR WORLD</p>
+              <h1>A place for everything<span class="heading-dot">.</span></h1>
+              <p class="muted">
+                Choose the public services you want in your workspace.
+              </p>
+            </div>
+          </div>
+          <div id="services-grid" class="services-grid"></div>
+          <p class="integration-note">
+            Service choices are saved in this browser for your account. GitHub
+            uses public repositories. Private account connections require
+            backend OAuth integration.
+          </p>
+        </section>
+        <section id="account-page" hidden>
+          <div class="page-heading">
+            <div>
+              <p class="eyebrow">MAKE YOURSELF AT HOME</p>
+              <h1>Your account<span class="heading-dot">.</span></h1>
+              <p class="muted">One account. A space that is yours.</p>
+            </div>
+          </div>
+          <div class="account-card">
+            <span class="badge">Verified account</span>
+            <h2>Profile</h2>
+            <dl>
+              <dt>Username</dt>
+              <dd id="profile-name"></dd>
+              <dt>Email address</dt>
+              <dd id="profile-email"></dd>
+            </dl>
+            <p class="muted">
+              Your widget configurations and order are saved to your account.
+            </p>
+          </div>
+        </section>
+      </main>
+    </div>
+    <dialog id="widget-dialog" aria-labelledby="dialog-title">
+      <form id="widget-form">
+        <div class="dialog-header">
+          <div>
+            <p class="eyebrow">MAKE IT YOURS</p>
+            <h2 id="dialog-title">Add a widget</h2>
+          </div>
+          <button
+            type="button"
+            class="icon-button"
+            data-close="widget-dialog"
+            aria-label="Close widget editor"
+          >
+            ×
+          </button>
+        </div>
+        <p class="muted">Choose a source, make it personal, set its pace.</p>
+        <label>Service<select id="service" required></select></label
+        ><label>Widget<select id="widget" required></select></label>
+        <p id="widget-description" class="field-help"></p>
+        <div id="configuration"></div>
+        <label
+          >Refresh every<select id="refresh-rate">
+            <option value="10">10 seconds</option>
+            <option value="30">30 seconds</option>
+            <option value="60">1 minute</option>
+            <option value="300" selected>5 minutes</option>
+            <option value="900">15 minutes</option>
+            <option value="3600">1 hour</option>
+          </select></label
+        >
+        <p class="field-help">
+          Short intervals can reach service rate limits. Five minutes is a good
+          start.
+        </p>
+        <p id="widget-message" class="form-message" role="alert"></p>
+        <div class="dialog-actions">
+          <button type="button" class="secondary" data-close="widget-dialog">
+            Cancel</button
+          ><button id="save-widget" class="primary">Add widget</button>
+        </div>
+      </form>
+    </dialog>
+    <dialog id="delete-dialog" aria-labelledby="delete-title">
+      <form id="delete-form">
+        <div class="dialog-header">
+          <h2 id="delete-title">Remove this widget?</h2>
+          <button
+            type="button"
+            class="icon-button"
+            data-close="delete-dialog"
+            aria-label="Close confirmation"
+          >
+            ×
+          </button>
+        </div>
+        <p class="muted">
+          This removes the widget and its configuration from your dashboard.
+        </p>
+        <p id="delete-message" class="form-message" role="alert"></p>
+        <div class="dialog-actions">
+          <button type="button" class="secondary" data-close="delete-dialog">
+            Keep widget</button
+          ><button class="danger">Remove widget</button>
+        </div>
+      </form>
+    </dialog>
+    <script type="module" src="/app.js"></script>
   </body>
 </html>
