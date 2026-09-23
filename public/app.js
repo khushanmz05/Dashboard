@@ -11,7 +11,7 @@ const state = {
   user: null,
   services: [],
   widgets: [],
-  enabled: ["weather"],
+  enabled: [],
   filter: "all",
   editingId: null,
   deletingId: null,
@@ -99,52 +99,28 @@ function setAuthMode(mode) {
   }[mode];
   $("#auth-message").textContent = "";
 }
-function readPreferences() {
-  try {
-    const saved = JSON.parse(
-      localStorage.getItem(`dashboard:services:${state.user.id}`) ||
-        '["weather"]',
-    );
-    state.enabled = Array.isArray(saved)
-      ? saved.filter((name) =>
-          state.services.some((service) => service.name === name),
-        )
-      : ["weather"];
-  } catch {
-    state.enabled = ["weather"];
-  }
-  state.enabled = [
-    ...new Set([
-      "weather",
-      ...state.enabled,
-      ...state.widgets.map((item) => item.service_name),
-    ]),
-  ];
-}
-function savePreferences() {
-  try {
-    localStorage.setItem(
-      `dashboard:services:${state.user.id}`,
-      JSON.stringify(state.enabled),
-    );
-  } catch {
-    notify(
-      "Browser storage is unavailable. Service preferences will last for this session.",
-    );
-  }
+async function reloadServices() {
+  const result = await api("/api/services");
+  state.enabled = result.services
+    .filter((service) => service.enabled)
+    .map((service) => service.name);
+  renderServices();
 }
 async function startDashboard() {
   const me = await api("/api/me");
-  const [about, result] = await Promise.all([
+  const [about, result, subscriptions] = await Promise.all([
     api("/about.json"),
     api("/api/widgets"),
+    api("/api/services"),
   ]);
   stopTimers();
   state.user = me.user;
   state.services = about.server.services;
   state.widgets = result.widgets;
   state.filter = "all";
-  readPreferences();
+  state.enabled = subscriptions.services
+    .filter((service) => service.enabled)
+    .map((service) => service.name);
   $("#user-name").textContent = me.user.username;
   $("#user-avatar").textContent = me.user.username.slice(0, 1).toUpperCase();
   $("#profile-name").textContent = me.user.username;
@@ -184,9 +160,8 @@ function renderServices() {
         icon: "◈",
         description: "Add widgets from this service.",
       };
-      const enabled = state.enabled.includes(service.name),
-        used = state.widgets.some((item) => item.service_name === service.name);
-      return `<article class="service-card"><span class="service-icon ${esc(service.name)}" aria-hidden="true">${info.icon}</span><span class="badge ${enabled ? "" : "inactive"}">${enabled ? "Enabled" : "Available"}</span><h2>${esc(serviceTitle(service.name))}</h2><p class="muted">${esc(info.description)}</p><ul>${service.widgets.map((widget) => `<li>${esc(label(widget.name))}</li>`).join("")}</ul><button class="${enabled ? "secondary" : "primary"} full" data-enable="${esc(service.name)}" ${service.name === "weather" || used ? "disabled" : ""}>${service.name === "weather" ? "Available by default" : used ? "In use on your dashboard" : enabled ? "Disable service" : "Enable service"}</button>${enabled ? `<button class="text-button" data-add="${esc(service.name)}">Add a widget ↗</button>` : ""}</article>`;
+      const enabled = state.enabled.includes(service.name);
+      return `<article class="service-card"><span class="service-icon ${esc(service.name)}" aria-hidden="true">${info.icon}</span><span class="badge ${enabled ? "" : "inactive"}">${enabled ? "Enabled" : "Available"}</span><h2>${esc(serviceTitle(service.name))}</h2><p class="muted">${esc(info.description)}</p><ul>${service.widgets.map((widget) => `<li>${esc(label(widget.name))}</li>`).join("")}</ul><button class="${enabled ? "secondary" : "primary"} full" data-enable="${esc(service.name)}" ${service.name === "weather" ? "disabled" : ""}>${service.name === "weather" ? "Available by default" : enabled ? "Disable service" : "Enable service"}</button>${enabled ? `<button class="text-button" data-add="${esc(service.name)}">Add a widget ↗</button>` : ""}</article>`;
     })
     .join("");
   $("#enabled-count").textContent = state.enabled.length;
@@ -506,7 +481,7 @@ $("#delete-form").addEventListener("submit", (event) => {
 $("#refresh-all").addEventListener("click", () => {
   state.widgets.forEach((item) => refreshWidget(item));
 });
-document.addEventListener("click", (event) => {
+document.addEventListener("click", async (event) => {
   const button = event.target.closest("button");
   if (!button) return;
   if (button.hasAttribute("data-add")) {
@@ -528,11 +503,14 @@ document.addEventListener("click", (event) => {
   }
   if (button.dataset.enable) {
     const name = button.dataset.enable;
-    state.enabled = state.enabled.includes(name)
-      ? state.enabled.filter((entry) => entry !== name)
-      : [...state.enabled, name];
-    savePreferences();
-    renderServices();
+    try {
+      if (state.enabled.includes(name)) await api(`/api/services/${encodeURIComponent(name)}`, { method: "DELETE" });
+      else await api(`/api/services/${encodeURIComponent(name)}/enable`, { method: "POST" });
+      await reloadServices();
+      notify(`${serviceTitle(name)} service updated.`);
+    } catch (error) {
+      notify(error.message);
+    }
     return;
   }
   const item = state.widgets.find((entry) => entry.id === button.dataset.id);

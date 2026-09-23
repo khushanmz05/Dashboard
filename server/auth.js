@@ -27,20 +27,26 @@ function createUser({ username, email, password }) {
   const id = crypto.randomUUID();
   const verificationToken = crypto.randomBytes(32).toString("hex");
 
-  database.prepare(`
-    INSERT INTO users (
-      id, username, email, password_hash,
-      verification_token, verification_token_expires_at
-    )
-    VALUES (?, ?, ?, ?, ?, ?)
-  `).run(
-    id,
-    username,
-    email,
-    hashPassword(password),
-    verificationToken,
-    Math.floor(Date.now() / 1000) + VERIFICATION_DURATION
-  );
+  database.transaction(() => {
+    database.prepare(`
+      INSERT INTO users (
+        id, username, email, password_hash,
+        verification_token, verification_token_expires_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(
+      id,
+      username,
+      email,
+      hashPassword(password),
+      verificationToken,
+      Math.floor(Date.now() / 1000) + VERIFICATION_DURATION
+    );
+    database.prepare(`
+      INSERT INTO user_services (user_id, service_name)
+      VALUES (?, 'weather')
+    `).run(id);
+  })();
 
   return { id, verificationToken };
 }
