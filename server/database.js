@@ -22,4 +22,9 @@ if (!columns.includes("verification_token_expires_at")) {
   database.exec("ALTER TABLE users ADD COLUMN verification_token_expires_at INTEGER");
 }
 
+database.exec(`
+  INSERT OR IGNORE INTO user_services (user_id, service_name)
+  SELECT id, 'weather' FROM users
+`);
+
 module.exports = database;
