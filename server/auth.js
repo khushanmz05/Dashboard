@@ -19,8 +19,10 @@ function passwordMatches(password, storedPassword) {
   const suppliedHash = crypto.scryptSync(password, salt, 64);
   const expectedHash = Buffer.from(storedHash, "hex");
 
-  return suppliedHash.length === expectedHash.length &&
-    crypto.timingSafeEqual(suppliedHash, expectedHash);
+  return (
+    suppliedHash.length === expectedHash.length &&
+    crypto.timingSafeEqual(suppliedHash, expectedHash)
+  );
 }
 
 function createUser({ username, email, password }) {
@@ -28,38 +30,50 @@ function createUser({ username, email, password }) {
   const verificationToken = crypto.randomBytes(32).toString("hex");
 
   database.transaction(() => {
-    database.prepare(`
+    database
+      .prepare(
+        `
       INSERT INTO users (
         id, username, email, password_hash,
         verification_token, verification_token_expires_at
       )
       VALUES (?, ?, ?, ?, ?, ?)
-    `).run(
-      id,
-      username,
-      email,
-      hashPassword(password),
-      verificationToken,
-      Math.floor(Date.now() / 1000) + VERIFICATION_DURATION
-    );
-    database.prepare(`
+    `,
+      )
+      .run(
+        id,
+        username,
+        email,
+        hashPassword(password),
+        verificationToken,
+        Math.floor(Date.now() / 1000) + VERIFICATION_DURATION,
+      );
+    database
+      .prepare(
+        `
       INSERT INTO user_services (user_id, service_name)
       VALUES (?, 'weather')
-    `).run(id);
+    `,
+      )
+      .run(id);
   })();
 
   return { id, verificationToken };
 }
 
 function verifyUser(token) {
-  const result = database.prepare(`
+  const result = database
+    .prepare(
+      `
     UPDATE users
     SET is_verified = 1,
         verification_token = NULL,
         verification_token_expires_at = NULL
     WHERE verification_token = ?
       AND verification_token_expires_at > ?
-  `).run(token, Math.floor(Date.now() / 1000));
+  `,
+    )
+    .run(token, Math.floor(Date.now() / 1000));
 
   return result.changes === 1;
 }
@@ -69,30 +83,42 @@ function createSession(userId) {
   const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
   const expiresAt = Math.floor(Date.now() / 1000) + SESSION_DURATION;
 
-  database.prepare("DELETE FROM sessions WHERE expires_at <= ?")
+  database
+    .prepare("DELETE FROM sessions WHERE expires_at <= ?")
     .run(Math.floor(Date.now() / 1000));
 
-  database.prepare(`
+  database
+    .prepare(
+      `
     INSERT INTO sessions (token_hash, user_id, expires_at)
     VALUES (?, ?, ?)
-  `).run(tokenHash, userId, expiresAt);
+  `,
+    )
+    .run(tokenHash, userId, expiresAt);
 
   return token;
 }
 
 function authenticate(username, password) {
-  const user = database.prepare(`
+  const user = database
+    .prepare(
+      `
     SELECT id, username, email, password_hash, is_verified
     FROM users
     WHERE username = ?
-  `).get(username);
+  `,
+    )
+    .get(username);
 
   if (!user || !passwordMatches(password, user.password_hash)) {
     return { error: "Invalid username or password", status: 401 };
   }
 
   if (!user.is_verified) {
-    return { error: "Confirm your registration before signing in", status: 403 };
+    return {
+      error: "Confirm your registration before signing in",
+      status: 403,
+    };
   }
 
   return { user, token: createSession(user.id) };
@@ -103,13 +129,19 @@ function getUserFromSession(token) {
 
   const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
 
-  return database.prepare(`
+  return (
+    database
+      .prepare(
+        `
     SELECT users.id, users.username, users.email
     FROM sessions
     JOIN users ON users.id = sessions.user_id
     WHERE sessions.token_hash = ?
       AND sessions.expires_at > ?
-  `).get(tokenHash, Math.floor(Date.now() / 1000)) || null;
+  `,
+      )
+      .get(tokenHash, Math.floor(Date.now() / 1000)) || null
+  );
 }
 
 function deleteSession(token) {
@@ -119,11 +151,88 @@ function deleteSession(token) {
   database.prepare("DELETE FROM sessions WHERE token_hash = ?").run(tokenHash);
 }
 
+function getGithubConnection(userId) {
+  const row = database
+    .prepare(
+      `
+    SELECT credentials_json
+    FROM user_services
+    WHERE user_id = ? AND service_name = 'github'
+  `,
+    )
+    .get(userId);
+
+  if (!row?.credentials_json) return null;
+
+  try {
+    const credentials = JSON.parse(row.credentials_json);
+    if (typeof credentials.username !== "string" || !credentials.username)
+      return null;
+    return { username: credentials.username };
+  } catch {
+    return null;
+  }
+}
+
+function getGithubCredentials(userId) {
+  const row = database
+    .prepare(
+      `
+    SELECT credentials_json
+    FROM user_services
+    WHERE user_id = ? AND service_name = 'github'
+  `,
+    )
+    .get(userId);
+
+  if (!row?.credentials_json) return null;
+
+  try {
+    const credentials = JSON.parse(row.credentials_json);
+    if (
+      typeof credentials.username !== "string" ||
+      typeof credentials.token !== "string"
+    )
+      return null;
+    return credentials;
+  } catch {
+    return null;
+  }
+}
+
+function saveGithubCredentials(userId, credentials) {
+  database
+    .prepare(
+      `
+    INSERT INTO user_services (user_id, service_name, credentials_json)
+    VALUES (?, 'github', ?)
+    ON CONFLICT(user_id, service_name) DO UPDATE SET credentials_json = excluded.credentials_json
+  `,
+    )
+    .run(userId, JSON.stringify(credentials));
+}
+
+function deleteGithubCredentials(userId) {
+  database
+    .prepare(
+      `
+    UPDATE user_services
+    SET credentials_json = NULL
+    WHERE user_id = ? AND service_name = 'github'
+  `,
+    )
+    .run(userId);
+}
+
 module.exports = {
   SESSION_DURATION,
   createUser,
   verifyUser,
   authenticate,
   getUserFromSession,
-  deleteSession
+  deleteSession,
+  getGithubConnection,
+  getGithubCredentials,
+  saveGithubCredentials,
+  deleteGithubCredentials,
 };
