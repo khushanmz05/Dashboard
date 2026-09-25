@@ -199,12 +199,15 @@ They are separate from the Dashboard application started by `npm start`.
 | GET    | `/auth/github/callback` | Validate OAuth state and finish the GitHub connection |
 | DELETE | `/api/github`           | Remove the current user's GitHub connection           |
 | GET    | `/api/widgets`          | List the user's widget instances                      |
+| GET    | `/api/widgets/:id/data` | Fetch structured data for the user's widget           |
 | POST   | `/api/widgets`          | Create a widget instance                              |
 | PATCH  | `/api/widgets/:id`      | Update a widget or its position                       |
 | DELETE | `/api/widgets/:id`      | Remove a widget; returns HTTP 204                     |
 
 All `/api/` routes require an authenticated session. Request bodies use JSON.
-There are currently no API routes for service subscriptions or widget source data.
+Widget data is fetched server-side from the saved widget configuration. GitHub
+uses the connected account, and RSS requests are protected against internal
+addresses, oversized responses, long requests and redirect chains.
 
 ## Configuration
 
@@ -264,7 +267,7 @@ must also be checked separately. Verification notes are recorded in
 | --------------------- | --------------------------------------------------------------------------------------- |
 | Service subscriptions | Enabled services are browser preferences, not server-side subscriptions                 |
 | GitHub authorization  | Authenticated users can connect one GitHub account; OAuth tokens remain server-side     |
-| RSS access            | Feeds must allow browser CORS; other feeds need a backend proxy                         |
+| RSS access            | Feeds are fetched server-side with SSRF, size, timeout and redirect protections         |
 | Account confirmation  | Uses a development code returned by the API; does not verify email ownership            |
 | Widget ordering       | Positions are saved through individual requests; a failed reorder can partially persist |
 | External availability | Provider outages and rate limits can prevent updates                                    |
@@ -277,10 +280,10 @@ integration work still needs to be completed and demonstrated.
 
 - [ ] Persist service subscriptions and enforce them on the backend
 - [ ] Link GitHub accounts through OAuth and keep tokens server-side
-- [ ] Provide server-side widget data endpoints, including a protected RSS proxy
+- [x] Provide server-side widget data endpoints, including a protected RSS proxy
 - [ ] Send registration confirmation emails and support controlled resending
 - [ ] Strengthen API validation, including partial widget updates
-- [ ] Connect the frontend to the new subscription, authorization and data endpoints
+- [x] Connect the frontend to the new subscription, authorization and data endpoints
 - [ ] Verify Docker startup and the complete workflow against real providers
 - [ ] Prepare the final demonstration and update documentation to match the delivered version
 

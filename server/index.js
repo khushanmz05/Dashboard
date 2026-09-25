@@ -15,6 +15,7 @@ const {
   saveGithubCredentials,
   deleteGithubCredentials,
 } = require("./auth");
+const { fetchWidgetData, ProviderError } = require("./providers");
 
 const PORT = process.env.PORT || 8080;
 const publicDirectory = path.join(__dirname, "..", "public");
@@ -532,6 +533,24 @@ const server = http.createServer(async (request, response) => {
           .map(serialize),
       });
     }
+    const dataMatch = url.pathname.match(/^\/api\/widgets\/([\w-]+)\/data$/);
+    if (dataMatch && request.method === "GET") {
+      const user = requireUser(request);
+      const widget = database
+        .prepare("SELECT * FROM dashboard_widgets WHERE id = ? AND user_id = ?")
+        .get(dataMatch[1], user.id);
+      if (!widget) throw new HttpError(404, "Widget not found");
+      const credentials =
+        widget.service_name === "github" ? getGithubCredentials(user.id) : null;
+      const data = await fetchWidgetData(
+        {
+          ...widget,
+          configuration: JSON.parse(widget.configuration_json),
+        },
+        credentials,
+      );
+      return sendJson(response, 200, { data });
+    }
     if (request.method === "POST" && url.pathname === "/api/widgets") {
       const user = requireUser(request);
       const body = await readJson(request);
@@ -620,6 +639,8 @@ const server = http.createServer(async (request, response) => {
     if (request.method === "GET" && serveStatic(response, url.pathname)) return;
     return sendJson(response, 404, { error: "Not found" });
   } catch (error) {
+    if (error instanceof ProviderError)
+      return sendJson(response, error.status, { error: error.message });
     if (error.code?.startsWith("SQLITE_CONSTRAINT"))
       return sendJson(response, 409, {
         error: "Username or email already exists",
