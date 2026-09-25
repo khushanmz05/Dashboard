@@ -108,10 +108,11 @@ async function reloadServices() {
 }
 async function startDashboard() {
   const me = await api("/api/me");
-  const [about, result, subscriptions] = await Promise.all([
+  const [about, result, subscriptions, github] = await Promise.all([
     api("/about.json"),
     api("/api/widgets"),
     api("/api/services"),
+    api("/api/github"),
   ]);
   stopTimers();
   state.user = me.user;
@@ -125,6 +126,7 @@ async function startDashboard() {
   $("#user-avatar").textContent = me.user.username.slice(0, 1).toUpperCase();
   $("#profile-name").textContent = me.user.username;
   $("#profile-email").textContent = me.user.email;
+  renderGithubConnection(github);
   $(".skip-link").href = "#main-content";
   $("#auth-view").hidden = true;
   $("#dashboard-view").hidden = false;
@@ -141,6 +143,13 @@ async function startDashboard() {
   switchView("overview");
   renderServices();
   renderWidgets();
+}
+function renderGithubConnection(connection) {
+  $("#github-connection-status").textContent = connection.connected
+    ? `Connected as @${connection.username}`
+    : "Not connected";
+  $("#github-connect").hidden = connection.connected;
+  $("#github-disconnect").hidden = !connection.connected;
 }
 function switchView(view) {
   for (const name of ["overview", "services", "account"])
@@ -427,6 +436,26 @@ $("#logout-button").addEventListener("click", async () => {
     notify(error.message);
   }
 });
+$("#github-connect").addEventListener("click", async () => {
+  const message = $("#github-connection-message");
+  message.textContent = "";
+  try {
+    const result = await api("/auth/github/connect");
+    window.location.assign(result.url);
+  } catch (error) {
+    message.textContent = error.message;
+  }
+});
+$("#github-disconnect").addEventListener("click", async () => {
+  const message = $("#github-connection-message");
+  try {
+    const result = await api("/api/github", { method: "DELETE" });
+    renderGithubConnection(result);
+    message.textContent = "GitHub disconnected.";
+  } catch (error) {
+    message.textContent = error.message;
+  }
+});
 $("#service").addEventListener("change", () => populateWidgetChoices());
 $("#widget").addEventListener("change", () => renderParameters());
 $("#widget-form").addEventListener("submit", (event) => {
@@ -504,8 +533,14 @@ document.addEventListener("click", async (event) => {
   if (button.dataset.enable) {
     const name = button.dataset.enable;
     try {
-      if (state.enabled.includes(name)) await api(`/api/services/${encodeURIComponent(name)}`, { method: "DELETE" });
-      else await api(`/api/services/${encodeURIComponent(name)}/enable`, { method: "POST" });
+      if (state.enabled.includes(name))
+        await api(`/api/services/${encodeURIComponent(name)}`, {
+          method: "DELETE",
+        });
+      else
+        await api(`/api/services/${encodeURIComponent(name)}/enable`, {
+          method: "POST",
+        });
       await reloadServices();
       notify(`${serviceTitle(name)} service updated.`);
     } catch (error) {
