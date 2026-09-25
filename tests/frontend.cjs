@@ -53,6 +53,111 @@ async function visible(locator) {
   page.on("pageerror", (error) => errors.push(error.message));
   let weatherRequests = 0,
     failWeather = false;
+  const widgetsById = new Map();
+  await page.route(`${origin}/api/widgets`, async (route) => {
+    if (route.request().method() !== "GET") return route.continue();
+    const response = await route.fetch();
+    const payload = await response.json();
+    for (const widget of payload.widgets) widgetsById.set(widget.id, widget);
+    return route.fulfill({
+      status: response.status(),
+      headers: response.headers(),
+      body: JSON.stringify(payload),
+    });
+  });
+  await page.route(`${origin}/api/widgets/*/data`, (route) => {
+    const widget = widgetsById.get(route.request().url().split("/").at(-2));
+    if (!widget)
+      return route.fulfill({
+        status: 404,
+        json: { error: "Widget not found" },
+      });
+    if (widget.service_name === "weather") {
+      weatherRequests++;
+      if (failWeather)
+        return route.fulfill({
+          status: 503,
+          json: { error: "Weather unavailable" },
+        });
+      const city = widget.configuration.city;
+      return route.fulfill({
+        json: {
+          data: {
+            type: "weather",
+            widget: widget.widget_name,
+            city,
+            temperature: city === "Barcelona" ? 23 : 17,
+            precipitation: 0.4,
+            weather_code: 2,
+          },
+        },
+      });
+    }
+    if (widget.service_name === "github") {
+      if (widget.widget_name === "recent_commits")
+        return route.fulfill({
+          json: {
+            data: {
+              type: "list",
+              items: [
+                {
+                  title: "Improve keyboard navigation",
+                  url: "https://github.com/example/project/commit/abc",
+                  detail: "Alex",
+                },
+              ],
+            },
+          },
+        });
+      if (widget.widget_name === "open_issues")
+        return route.fulfill({
+          json: {
+            data: {
+              type: "metric",
+              value: 18,
+              unit: "",
+              caption: "Open issues · pull requests excluded",
+            },
+          },
+        });
+      return route.fulfill({
+        json: {
+          data: {
+            type: "metric",
+            value: 4280,
+            unit: "☆",
+            caption: "People following this repository",
+          },
+        },
+      });
+    }
+    if (widget.widget_name === "article_count")
+      return route.fulfill({
+        json: {
+          data: {
+            type: "metric",
+            value: 2,
+            unit: "",
+            caption: "Articles currently available in this feed",
+          },
+        },
+      });
+    return route.fulfill({
+      json: {
+        data: {
+          type: "list",
+          items: [
+            {
+              title: "Designing a calmer workspace",
+              url: "https://example.com/article",
+              detail: "",
+            },
+            { title: "<img src=x onerror=alert(1)>", url: "", detail: "" },
+          ],
+        },
+      },
+    });
+  });
   await page.route("https://geocoding-api.open-meteo.com/**", (route) => {
     const city = new URL(route.request().url()).searchParams.get("name");
     return route.fulfill({
