@@ -4,7 +4,8 @@
   "private": true,
   "scripts": {
     "start": "node server/index.js",
-    "test:frontend": "node tests/frontend.cjs"
+    "test:frontend": "node tests/frontend.cjs",
+    "test:widgets-api": "node tests/widgets-api.cjs"
   },
   "dependencies": {
     "better-sqlite3": "^12.11.1"
