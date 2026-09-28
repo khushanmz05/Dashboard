@@ -47,19 +47,19 @@ const services = [
         name: "article_list",
         description: "Display recent RSS articles",
         params: [
-          { name: "link", type: "string" },
-          { name: "number", type: "integer" },
+          { name: "link", type: "string", format: "url" },
+          { name: "number", type: "integer", min: 1, max: 20 },
         ],
       },
       {
         name: "article_count",
         description: "Display RSS article count",
-        params: [{ name: "link", type: "string" }],
+        params: [{ name: "link", type: "string", format: "url" }],
       },
       {
         name: "latest_article",
         description: "Display latest RSS article",
-        params: [{ name: "link", type: "string" }],
+        params: [{ name: "link", type: "string", format: "url" }],
       },
     ],
   },
@@ -70,19 +70,38 @@ const services = [
         name: "recent_commits",
         description: "Display recent repository commits",
         params: [
-          { name: "repository", type: "string" },
-          { name: "number", type: "integer" },
+          {
+            name: "repository",
+            type: "string",
+            pattern: /^[\w.-]+\/[\w.-]+$/,
+            patternMessage: "Use owner/repository, for example facebook/react",
+          },
+          { name: "number", type: "integer", min: 1, max: 20 },
         ],
       },
       {
         name: "open_issues",
         description: "Display open repository issues",
-        params: [{ name: "repository", type: "string" }],
+        params: [
+          {
+            name: "repository",
+            type: "string",
+            pattern: /^[\w.-]+\/[\w.-]+$/,
+            patternMessage: "Use owner/repository, for example facebook/react",
+          },
+        ],
       },
       {
         name: "repository_stars",
         description: "Display repository stars",
-        params: [{ name: "repository", type: "string" }],
+        params: [
+          {
+            name: "repository",
+            type: "string",
+            pattern: /^[\w.-]+\/[\w.-]+$/,
+            patternMessage: "Use owner/repository, for example facebook/react",
+          },
+        ],
       },
     ],
   },
@@ -195,43 +214,70 @@ function serviceIsEnabled(userId, name) {
     )
   );
 }
-function validateWidget(body, partial = false) {
+// Validates a configuration object against a specific widget's declared
+// parameters and returns a sanitized copy containing only declared params
+// (trimmed strings, range/pattern-checked values). Undeclared parameters are
+// silently dropped rather than stored. This is the single source of truth
+// for configuration validation: it is used identically by widget creation
+// and by PATCH, so a PATCH can never store a configuration that create()
+// would have rejected.
+function validateConfiguration(serviceName, widgetName, configuration) {
   if (
-    !partial ||
-    body.service_name !== undefined ||
-    body.widget_name !== undefined
-  ) {
-    if (
-      typeof body.service_name !== "string" ||
-      typeof body.widget_name !== "string" ||
-      !body.configuration ||
-      Array.isArray(body.configuration)
-    )
-      throw new HttpError(
-        400,
-        "Service, widget, and configuration are required",
-      );
-    for (const param of definition(body.service_name, body.widget_name)
-      .params) {
-      const value = body.configuration[param.name];
-      if (
-        (param.type === "string" &&
-          (typeof value !== "string" || !value.trim())) ||
-        (param.type === "integer" && !Number.isInteger(value))
-      )
+    !configuration ||
+    typeof configuration !== "object" ||
+    Array.isArray(configuration)
+  )
+    throw new HttpError(400, "Configuration is required");
+  const widget = definition(serviceName, widgetName);
+  const sanitized = {};
+  for (const param of widget.params) {
+    const value = configuration[param.name];
+    if (param.type === "string") {
+      if (typeof value !== "string" || !value.trim())
         throw new HttpError(400, `Invalid ${param.name}`);
+      const trimmed = value.trim();
+      if (param.pattern && !param.pattern.test(trimmed))
+        throw new HttpError(
+          400,
+          param.patternMessage || `Invalid ${param.name}`,
+        );
+      if (param.format === "url") {
+        let parsed;
+        try {
+          parsed = new URL(trimmed);
+        } catch {
+          throw new HttpError(400, `${param.name} must be a valid URL`);
+        }
+        if (parsed.protocol !== "http:" && parsed.protocol !== "https:")
+          throw new HttpError(400, `${param.name} must use http or https`);
+      }
+      sanitized[param.name] = trimmed;
+    } else if (param.type === "integer") {
+      if (!Number.isInteger(value))
+        throw new HttpError(400, `Invalid ${param.name}`);
+      if (param.min !== undefined && value < param.min)
+        throw new HttpError(
+          400,
+          `${param.name} must be at least ${param.min}`,
+        );
+      if (param.max !== undefined && value > param.max)
+        throw new HttpError(400, `${param.name} must be at most ${param.max}`);
+      sanitized[param.name] = value;
     }
   }
-  if (
-    body.refresh_rate !== undefined &&
-    (!Number.isInteger(body.refresh_rate) || body.refresh_rate < 10)
-  )
+  return sanitized;
+}
+function normalizeRefreshRate(value, fallback) {
+  if (value === undefined) return fallback;
+  if (!Number.isInteger(value) || value < 10)
     throw new HttpError(400, "Refresh rate must be at least 10 seconds");
-  if (
-    body.position_y !== undefined &&
-    (!Number.isInteger(body.position_y) || body.position_y < 0)
-  )
+  return value;
+}
+function normalizePositionY(value, fallback) {
+  if (value === undefined) return fallback;
+  if (!Number.isInteger(value) || value < 0)
     throw new HttpError(400, "Invalid widget position");
+  return value;
 }
 function serialize(row) {
   return {
@@ -554,7 +600,17 @@ const server = http.createServer(async (request, response) => {
     if (request.method === "POST" && url.pathname === "/api/widgets") {
       const user = requireUser(request);
       const body = await readJson(request);
-      validateWidget(body);
+      if (
+        typeof body.service_name !== "string" ||
+        typeof body.widget_name !== "string"
+      )
+        throw new HttpError(400, "Service and widget are required");
+      const configuration = validateConfiguration(
+        body.service_name,
+        body.widget_name,
+        body.configuration,
+      );
+      const refreshRate = normalizeRefreshRate(body.refresh_rate, 60);
       if (!serviceIsEnabled(user.id, body.service_name))
         throw new HttpError(
           403,
@@ -575,8 +631,8 @@ const server = http.createServer(async (request, response) => {
           user.id,
           body.service_name,
           body.widget_name,
-          JSON.stringify(body.configuration),
-          body.refresh_rate ?? 60,
+          JSON.stringify(configuration),
+          refreshRate,
           position,
         );
       return sendJson(response, 201, {
@@ -591,20 +647,57 @@ const server = http.createServer(async (request, response) => {
     if (match && request.method === "PATCH") {
       const user = requireUser(request);
       const body = await readJson(request);
-      validateWidget(body, true);
       const existing = database
         .prepare("SELECT * FROM dashboard_widgets WHERE id = ? AND user_id = ?")
         .get(match[1], user.id);
       if (!existing) throw new HttpError(404, "Widget not found");
+      const changingIdentity =
+        body.service_name !== undefined || body.widget_name !== undefined;
+      if (
+        changingIdentity &&
+        (typeof body.service_name !== "string" ||
+          typeof body.widget_name !== "string")
+      )
+        throw new HttpError(
+          400,
+          "Both service and widget are required to change widget type",
+        );
       const serviceName = body.service_name ?? existing.service_name;
       const widgetName = body.widget_name ?? existing.widget_name;
-      if (body.service_name || body.widget_name)
+      // Whenever a configuration is supplied it is always validated against
+      // the *resolved* (possibly just-changed) widget definition, so a PATCH
+      // can never persist a configuration that skips type/pattern/range
+      // checks. If the widget's identity changes, a matching configuration
+      // must be supplied too -- the old configuration is not assumed to
+      // still be valid for a different widget type.
+      let configurationJson = existing.configuration_json;
+      if (body.configuration !== undefined) {
+        configurationJson = JSON.stringify(
+          validateConfiguration(serviceName, widgetName, body.configuration),
+        );
+      } else if (changingIdentity) {
+        throw new HttpError(
+          400,
+          "Configuration is required when changing widget type",
+        );
+      } else {
+        // identity unchanged, configuration not being touched: still confirm
+        // the combination is a real service/widget (guards against stale rows).
         definition(serviceName, widgetName);
+      }
       if (!serviceIsEnabled(user.id, serviceName))
         throw new HttpError(
           403,
           `Enable ${serviceName} before using its widgets`,
         );
+      const refreshRate = normalizeRefreshRate(
+        body.refresh_rate,
+        existing.refresh_rate,
+      );
+      const positionY = normalizePositionY(
+        body.position_y,
+        existing.position_y,
+      );
       database
         .prepare(
           "UPDATE dashboard_widgets SET service_name = ?, widget_name = ?, configuration_json = ?, refresh_rate = ?, position_y = ?, updated_at = unixepoch() WHERE id = ?",
@@ -612,11 +705,9 @@ const server = http.createServer(async (request, response) => {
         .run(
           serviceName,
           widgetName,
-          JSON.stringify(
-            body.configuration ?? JSON.parse(existing.configuration_json),
-          ),
-          body.refresh_rate ?? existing.refresh_rate,
-          body.position_y ?? existing.position_y,
+          configurationJson,
+          refreshRate,
+          positionY,
           existing.id,
         );
       return sendJson(response, 200, {
