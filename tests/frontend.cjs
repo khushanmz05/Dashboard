@@ -12,7 +12,7 @@ const port = process.env.TEST_PORT || 8187;
 const origin = `http://127.0.0.1:${port}`;
 const screenshotDirectory = process.env.SCREENSHOT_DIR;
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-let server, browser;
+let server, browser, database;
 async function visible(locator) {
   await locator.waitFor({ state: "visible" });
 }
@@ -28,9 +28,23 @@ async function visible(locator) {
     path.join(temporary, "node_modules"),
     "junction",
   );
-  server = spawn(process.execPath, ["server/index.js"], {
+  // Test-only provider boundary: exercise real OAuth routes/cookies/storage while
+  // replacing GitHub's token exchange and profile response. Never uses real keys.
+  fs.writeFileSync(path.join(temporary, "provider-fixture.cjs"), `
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async (url, options) => {
+      if (String(url) === "https://github.com/login/oauth/access_token")
+        return Response.json({access_token: "test-only-token"});
+      if (String(url) === "https://api.github.com/user")
+        return Response.json({id: 12345, login: "frontend-fixture"});
+      if (!String(url).startsWith("http://127.0.0.1:"))
+        throw new Error("Unexpected external request in test: " + url);
+      return originalFetch(url, options);
+    };
+  `);
+  server = spawn(process.execPath, ["--require", "./provider-fixture.cjs", "server/index.js"], {
     cwd: temporary,
-    env: { ...process.env, PORT: port },
+    env: { ...process.env, PORT: port, GITHUB_CLIENT_ID: "fixture-client", GITHUB_CLIENT_SECRET: "fixture-secret", GITHUB_CALLBACK_URL: `${origin}/auth/github/callback` },
     stdio: "pipe",
   });
   for (let i = 0; i < 100; i++) {
@@ -39,6 +53,7 @@ async function visible(locator) {
     } catch {}
     await sleep(100);
   }
+  database = new (require("better-sqlite3"))(path.join(temporary, "data/dashboard.sqlite"));
   browser = await chromium.launch({
     headless: true,
     ...(process.env.CHROMIUM_PATH
@@ -52,7 +67,7 @@ async function visible(locator) {
   const errors = [];
   page.on("pageerror", (error) => errors.push(error.message));
   let weatherRequests = 0,
-    failWeather = false;
+    failWeather = false, failGithub = false, expireDataSession = false, malformedWeather = false;
   const widgetsById = new Map();
   await page.route(`${origin}/api/widgets`, async (route) => {
     if (route.request().method() !== "GET") return route.continue();
@@ -66,6 +81,7 @@ async function visible(locator) {
     });
   });
   await page.route(`${origin}/api/widgets/*/data`, (route) => {
+    if (expireDataSession) return route.continue();
     const widget = widgetsById.get(route.request().url().split("/").at(-2));
     if (!widget)
       return route.fulfill({
@@ -79,6 +95,7 @@ async function visible(locator) {
           status: 503,
           json: { error: "Weather unavailable" },
         });
+      if (malformedWeather) return route.fulfill({ json: {data: {type: "weather", temperature: null}} });
       const city = widget.configuration.city;
       return route.fulfill({
         json: {
@@ -94,6 +111,9 @@ async function visible(locator) {
       });
     }
     if (widget.service_name === "github") {
+      const connection = database.prepare("SELECT credentials_json FROM user_services WHERE service_name = 'github'").get();
+      if (!connection?.credentials_json) return route.fulfill({status: 403, json: {error: "Connect GitHub before using GitHub widgets"}});
+      if (failGithub) return route.fulfill({status: 401, json: {error: "GitHub connection is invalid. Reconnect GitHub."}});
       if (widget.widget_name === "recent_commits")
         return route.fulfill({
           json: {
@@ -152,68 +172,22 @@ async function visible(locator) {
               url: "https://example.com/article",
               detail: "",
             },
-            { title: "<img src=x onerror=alert(1)>", url: "", detail: "" },
+            { title: "<img src=x onerror=alert(1)>", url: "javascript:alert(1)", detail: "<script>bad()</script>" },
           ],
         },
       },
     });
   });
-  await page.route("https://geocoding-api.open-meteo.com/**", (route) => {
-    const city = new URL(route.request().url()).searchParams.get("name");
-    return route.fulfill({
-      json: {
-        results: [
-          {
-            name: city,
-            country: city === "Barcelona" ? "Spain" : "Japan",
-            latitude: city === "Barcelona" ? 41 : 35,
-            longitude: 2,
-          },
-        ],
-      },
-    });
+  let oauthMode = "denied";
+  await page.route("https://github.com/login/oauth/authorize?*", async (route) => {
+    const url = new URL(route.request().url());
+    assert.equal(url.searchParams.get("client_id"), "fixture-client");
+    assert.equal(url.searchParams.get("redirect_uri"), `${origin}/auth/github/callback`);
+    const callback = new URL(`${origin}/auth/github/callback`);
+    callback.searchParams.set("state", url.searchParams.get("state"));
+    callback.searchParams.set(oauthMode === "denied" ? "error" : "code", oauthMode === "denied" ? "access_denied" : "fixture-code");
+    await route.fulfill({status: 302, headers: {location: callback.href}});
   });
-  await page.route("https://api.open-meteo.com/**", (route) => {
-    weatherRequests++;
-    if (failWeather)
-      return route.fulfill({ status: 503, json: { error: "Unavailable" } });
-    return route.fulfill({
-      json: {
-        current: {
-          temperature_2m: route.request().url().includes("latitude=41")
-            ? 23
-            : 17,
-          precipitation: 0.4,
-          weather_code: 2,
-        },
-      },
-    });
-  });
-  await page.route("https://api.github.com/**", (route) => {
-    const url = route.request().url();
-    if (url.includes("/commits"))
-      return route.fulfill({
-        json: [
-          {
-            commit: {
-              message: "Improve keyboard navigation",
-              author: { name: "Alex" },
-            },
-            html_url: "https://github.com/example/project/commit/abc",
-            sha: "abc1234",
-          },
-        ],
-      });
-    if (url.includes("/search/issues"))
-      return route.fulfill({ json: { total_count: 18 } });
-    return route.fulfill({ json: { stargazers_count: 4280 } });
-  });
-  await page.route("https://example.com/feed.xml", (route) =>
-    route.fulfill({
-      contentType: "application/xml",
-      body: '<rss version="2.0"><channel><title>News</title><item><title>Designing a calmer workspace</title><link>https://example.com/article</link></item><item><title>&lt;img src=x onerror=alert(1)&gt;</title><link>javascript:alert(1)</link></item></channel></rss>',
-    }),
-  );
   await page.goto(origin);
   await visible(page.locator("#login-form"));
   if (screenshotDirectory) {
@@ -231,7 +205,20 @@ async function visible(locator) {
   await page.locator("#register-form [name=password]").fill("Frontend123!");
   await page.locator("#register-form button").click();
   await visible(page.locator("#verify-form"));
-  assert.ok(await page.locator("#verify-form input").inputValue());
+  const confirmation = await page.locator("#verify-form input").inputValue();
+  assert.ok(confirmation);
+  assert.match(await page.locator("#verification-notice").innerText(), /does not send an email/);
+  await page.locator("#verify-form input").fill("invalid-code");
+  await page.locator("#verify-form button").click();
+  await visible(page.getByText("Invalid or expired verification token", {exact: true}));
+  database.prepare("UPDATE users SET verification_token_expires_at = 1 WHERE username = ?").run("frontend-test");
+  await page.goto(`${origin}/?verify_token=${confirmation}`);
+  await visible(page.locator("#verify-form"));
+  assert.equal(new URL(page.url()).search, "");
+  assert.equal(await page.locator("#verify-form input").inputValue(), confirmation);
+  await page.locator("#verify-form button").click();
+  await visible(page.getByText("Invalid or expired verification token", {exact: true}));
+  database.prepare("UPDATE users SET verification_token_expires_at = ? WHERE username = ?").run(Math.floor(Date.now()/1000) + 3600, "frontend-test");
   // Unconfirmed accounts cannot access the dashboard.
   const denied = await page.request.post(`${origin}/auth/login`, {
     data: { username: "frontend-test", password: "Frontend123!" },
@@ -245,10 +232,35 @@ async function visible(locator) {
   await visible(page.locator("#dashboard-view"));
   await visible(page.getByText("Start with what matters"));
   console.log("PASS registration, confirmation, login, empty state");
-  await page.locator("[data-view=services]").click();
-  await page.locator("[data-enable=github]").click();
+  await page.locator(".nav-item[data-view=services]").click();
   await page.locator("[data-enable=rss]").click();
+  await page.waitForFunction(() => document.querySelector("[data-enable=rss]")?.textContent === "Disable service");
+  await page.locator("[data-enable=rss]").click();
+  await page.waitForFunction(() => document.querySelector("[data-enable=rss]")?.textContent === "Enable service");
+  await page.locator("[data-enable=rss]").click();
+  await page.locator("[data-enable=github]").click();
+  await visible(page.locator('[data-service-card=github] [data-github-connect]'));
+  assert.equal(await page.locator('[data-service-card=github] [data-add]').count(), 0);
+  await page.reload();
+  await page.locator(".nav-item[data-view=services]").click();
+  assert.equal(await page.locator("[data-enable=rss]").innerText(), "Disable service");
+  await page.route(`${origin}/auth/github/connect`, route => route.fulfill({status: 503, json: {error: "GitHub connection is not configured"}}));
+  await page.locator("#github-connect").click();
+  await visible(page.getByText("GitHub connection is not configured", {exact: true}));
+  await page.unroute(`${origin}/auth/github/connect`);
+  await page.locator("#github-connect").click();
+  await visible(page.getByText("GitHub authorization was cancelled. You can try connecting again.", {exact: true}));
+  assert.equal(new URL(page.url()).search, "");
+  oauthMode = "connected";
+  await page.locator("#github-connect").click();
+  await visible(page.getByText("GitHub connected as @frontend-fixture. You can now add repository widgets.", {exact: true}));
+  assert.equal(new URL(page.url()).search, "");
+  assert.equal((await (await page.request.get(`${origin}/api/github`)).json()).connected, true);
+  await page.locator("#github-disconnect").click();
+  await page.getByRole("button", {name: "Keep connected"}).click();
+  assert.equal((await (await page.request.get(`${origin}/api/github`)).json()).connected, true);
   await page.locator("[data-view=overview]").click();
+  console.log("PASS server subscriptions, persistence, OAuth unavailable/denied/connected and disconnect cancellation");
   async function add(service, widget, config, refresh = "300") {
     await page.locator(".page-heading [data-add]").first().click();
     await page.locator("#service").selectOption(service);
@@ -267,9 +279,10 @@ async function visible(locator) {
   await add("weather", "weather_condition", { city: "Barcelona" });
   await add("weather", "precipitation", { city: "Barcelona" });
   await add("github", "recent_commits", {
-    repository: "facebook/react",
+    repository: "https://github.com/facebook/react.git",
     number: 3,
   });
+  assert.equal([...widgetsById.values()].find(w => w.widget_name === "recent_commits").configuration.repository, "facebook/react");
   await add("github", "open_issues", { repository: "facebook/react" });
   await add("github", "repository_stars", { repository: "facebook/react" });
   await add("rss", "article_list", {
@@ -290,6 +303,20 @@ async function visible(locator) {
   console.log(
     "PASS all nine data renderers, independent configurations, safe RSS text and URLs",
   );
+  await page.locator(".nav-item[data-view=services]").click();
+  await page.locator("[data-enable=rss]").click();
+  await visible(page.getByText("Remove the 3 widgets using this service before disabling it", {exact: true}));
+  assert.equal(await page.locator("[data-enable=rss]").innerText(), "Disable service");
+  assert.equal(await page.locator("#services-message").getAttribute("data-kind"), "error");
+  await page.locator("[data-view=overview]").click();
+  malformedWeather = true;
+  await page.locator(".widget").first().locator("[data-action=refresh]").click();
+  await visible(page.locator(".widget").first().locator(".stale-note"));
+  assert.match(await page.locator(".widget").first().innerText(), /23/);
+  malformedWeather = false;
+  await page.locator(".widget").first().locator("[data-action=refresh]").click();
+  await page.locator(".stale-note").waitFor({state: "hidden"});
+  console.log("PASS subscription conflict stays visible and malformed data preserves last valid value");
   // Use clock simulation to prove the 10-second widget refreshes independently.
   await page.clock.install();
   await page
@@ -389,6 +416,30 @@ async function visible(locator) {
   console.log(
     "PASS filters, keyboard/button ordering, drag/drop, persistence, edit/cancel, delete/204",
   );
+  failGithub = true;
+  const githubCard = page.locator('.widget').filter({has: page.locator('.service-icon.github')}).first();
+  await githubCard.locator('[data-action=refresh]').click();
+  await visible(githubCard.locator('[data-github-connect]'));
+  await visible(page.locator("#dashboard-view"));
+  assert.match(await githubCard.innerText(), /Reconnect GitHub/);
+  await page.locator(".nav-item[data-view=services]").click();
+  await visible(page.getByText("Connection needs attention. Reconnect to resume updates.", {exact: true}));
+  failGithub = false;
+  await page.locator("#github-connect").click();
+  await visible(page.getByText("GitHub connected as @frontend-fixture. You can now add repository widgets.", {exact: true}));
+  await page.locator("#github-disconnect").click();
+  await page.locator("#disconnect-form .danger").click();
+  await visible(page.getByText("GitHub disconnected. Reconnect it to resume widget updates.", {exact: true}));
+  assert.equal((await (await page.request.get(`${origin}/api/github`)).json()).connected, false);
+  assert.equal((await (await page.request.get(`${origin}/api/widgets`)).json()).widgets.length, 9);
+  await page.locator("[data-view=overview]").click();
+  await visible(githubCard.locator('[data-github-connect]'));
+  await page.locator(".nav-item[data-view=services]").click();
+  await page.locator("#github-connect").click();
+  await visible(page.getByText("GitHub connected as @frontend-fixture. You can now add repository widgets.", {exact: true}));
+  await page.locator("[data-view=overview]").click();
+  await page.waitForFunction(() => !document.querySelector('.widget-body[aria-busy=true]'));
+  console.log("PASS revoked GitHub token preserves Dashboard session, reconnect and disconnect preserve widgets");
   if (screenshotDirectory)
     await page.screenshot({
       path: path.join(screenshotDirectory, "dashboard.png"),
@@ -413,13 +464,17 @@ async function visible(locator) {
       path: path.join(screenshotDirectory, "mobile.png"),
       fullPage: true,
     });
-  await page.locator("[data-view=services]").click();
+  await page.locator(".nav-item[data-view=services]").click();
   assert.equal(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= window.innerWidth,
     ),
     true,
   );
+  if (screenshotDirectory) await page.screenshot({path: path.join(screenshotDirectory, "services-mobile.png"), fullPage: true});
+  await page.locator("#github-disconnect").click();
+  if (screenshotDirectory) await page.screenshot({path: path.join(screenshotDirectory, "disconnect-mobile.png")});
+  await page.getByRole("button", {name: "Keep connected"}).click();
   await page.locator("[data-view=account]").click();
   await visible(page.locator("#profile-email"));
   await page.locator("#logout-button").click();
@@ -430,8 +485,8 @@ async function visible(locator) {
   await page.locator("#login-form button").click();
   await visible(page.locator("#dashboard-view"));
   await page.context().clearCookies();
-  await page.locator(".widget").first().locator("[data-action=delete]").click();
-  await page.locator("#delete-form .danger").click();
+  expireDataSession = true;
+  await page.locator(".widget").first().locator("[data-action=refresh]").click();
   await visible(page.locator("#auth-view"));
   assert.match(
     await page.locator("#auth-message").innerText(),
@@ -452,6 +507,7 @@ async function visible(locator) {
   })
   .finally(async () => {
     if (browser) await browser.close();
+    if (database) database.close();
     if (server && server.exitCode === null) {
       server.kill();
       await new Promise((resolve) => server.once("exit", resolve));
