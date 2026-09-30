@@ -2,71 +2,95 @@
 
 **Built by you. For you.**
 
-A personal dashboard that brings weather, GitHub activity and RSS feeds into one
-workspace. Choose your sources, configure your widgets and give each one its own
-refresh interval.
+A personal workspace for weather, GitHub activity and RSS feeds. Choose your
+services, configure multiple widgets and give each one its own refresh interval.
+Built for the **Epitech G-WEB-500 Dashboard project**, by a team of two.
 
-Developed for the **Epitech G-WEB-500 Dashboard project** by a team of two.
-
-[Getting started](#getting-started) · [Widgets](#services-and-widgets) ·
-[Architecture](#architecture) · [Tests](#testing) · [Roadmap](#roadmap)
+[Quick start](#quick-start) · [GitHub setup](#github-setup) ·
+[Widgets](#services-and-widgets) · [Tests](#testing) · [Status](#delivery-status)
 
 ## Features
 
-- **Personal accounts** — registration, account confirmation, sign-in and sign-out
-- **Custom dashboards** — add, configure, edit and remove widget instances
-- **Flexible layout** — reorder widgets by dragging or using the arrow buttons
-- **Independent refresh** — automatic updates per widget, individual refresh and refresh-all
-- **Saved workspace** — widget settings and order persist in SQLite for each user
-- **Responsive interface** — layouts for desktop and mobile, service filters and an account page
-- **Clear feedback** — loading states, actionable errors and visibly marked stale data after failed updates
-- **Keyboard support** — labelled controls, visible focus indicators and dialogs that support Escape
+- Registration, explicit account confirmation, sign-in and sign-out.
+- Server-persisted service subscriptions and per-user dashboards.
+- GitHub account connection, cancellation, disconnection and reconnection.
+- Nine widget types across three services, with independent configurations.
+- Add, edit, remove, filter and reorder widgets with drag handles or arrow buttons.
+- Automatic per-widget refresh, manual refresh and refresh-all.
+- Loading, empty, error and stale-data states, with recovery actions.
+- Responsive desktop/mobile views, labelled controls, visible focus and native dialogs.
 
-The application currently includes **3 services and 9 configurable widget types**.
-Server-side subscriptions, OAuth account linking and email delivery are planned;
-see [Current limitations](#current-limitations) for the exact integration status.
+## Quick start
 
-## Getting started
-
-### Local development
-
-Requirements: **Node.js 22 or 24**, npm and a modern browser. Internet access is
-needed to load external widget data. Run these commands from the repository root:
+Use **Node.js 22 or 24**, npm and a modern browser. From the repository root:
 
 ```bash
 npm ci
 npm start
 ```
 
-Open **[http://localhost:8080](http://localhost:8080)**.
+Open [http://localhost:8080](http://localhost:8080).
+There is no separate frontend build step. The same Node server serves the UI
+and API; SQLite is created automatically at `data/dashboard.sqlite`.
+External widget updates need internet access. Weather and RSS need no API keys;
+GitHub needs the OAuth configuration below.
 
-The same server serves the frontend and API. There is no separate frontend build
-step and no API key is required for the current public integrations. The database
-is created automatically at `data/dashboard.sqlite`.
+1. Choose **Create account**. Usernames need at least 3 characters and passwords 8.
+2. Click **Confirm account**. The current development server returns a code that
+   the form fills in. **No confirmation email is sent.**
+3. Sign in with your username and password.
+4. Open **Services**. Weather is available by default; enable RSS or GitHub.
+5. For GitHub, select **Connect GitHub** and authorize the account.
+6. Add a widget, enter its parameters and choose a refresh interval.
 
-Keep the terminal open while using the application. Press `Ctrl+C` to stop it.
+The default interval is **5 minutes**, with a minimum of **10 seconds**.
+Short intervals can exhaust provider rate limits. You can add several instances
+of the same type, such as weather for two cities.
+
+### GitHub setup
+
+Configure a GitHub OAuth App with these local URLs:
+
+| Setting | Value |
+| --- | --- |
+| Homepage URL | `http://localhost:8080` |
+| Authorization callback URL | `http://localhost:8080/auth/github/callback` |
+
+Create an untracked `.env` in the project root with your application values:
+
+```dotenv
+GITHUB_CLIENT_ID=your_client_id
+GITHUB_CLIENT_SECRET=your_client_secret
+GITHUB_CALLBACK_URL=http://localhost:8080/auth/github/callback
+```
+
+For local Node development, load it explicitly:
+
+```bash
+node --env-file=.env server/index.js
+```
+
+`npm start` reads exported environment variables, but does not load `.env` by
+itself. Restart the server after changing the configuration. Use the same host
+and port in the browser, OAuth App and callback setting.
+
+OAuth tokens stay on the server. The current scopes support **public repository
+widgets**; connecting an account does not add private repository access.
+Disconnection removes credentials and keeps widget configurations. The UI offers
+reconnection when a GitHub token becomes invalid, without ending the Dashboard
+session. Disabling a service requires removing its widgets first.
 
 ### Docker
 
-With Docker and Docker Compose installed:
+Docker Compose loads the root `.env` for GitHub configuration:
 
 ```bash
-docker-compose build
-docker-compose up
+docker compose up --build
 ```
 
-For Docker Compose v2, use:
-
-```bash
-docker compose build
-docker compose up
-```
-
-The `server` service exposes port **8080**. The `./data:/app/data` bind mount keeps
-the database on the host when containers are recreated. Stop the local npm server
-before starting Docker if it is already using port 8080.
-
-To stop the Compose services:
+For legacy Compose, use `docker-compose up --build`.
+The `server` service exposes **8080**, with `./data:/app/data` preserving the
+database on the host. Stop any local server using that port first.
 
 ```bash
 docker compose down
@@ -79,233 +103,170 @@ curl http://localhost:8080/health
 curl http://localhost:8080/about.json
 ```
 
-`/health` checks database connectivity. `/about.json` reports the client IP,
-current Unix timestamp, services, widget identifiers and configuration parameters.
-
-## Using the dashboard
-
-1. Select **Create account** and enter a username, email and password. Usernames
-   require at least 3 characters; passwords require at least 8.
-2. Select **Confirm account**. In the current development flow, the server returns
-   a confirmation code and the form fills it in. No email is sent.
-3. Sign in using your username and password.
-4. Open **Services** to enable GitHub or RSS. Weather is available by default.
-5. Select **Add widget**, choose its service and type, enter its parameters and
-   select a refresh interval.
-6. Use the card controls to refresh, edit, move or remove the widget.
-
-You can add the same widget more than once with different settings, such as
-weather in Barcelona and Tokyo, or activity from two GitHub repositories.
-
-The default interval in the widget form is **5 minutes**. The minimum is
-**10 seconds**; frequent requests can reach external service rate limits.
-
-### Example: recent GitHub commits
-
-On the Services page, enable GitHub. Then add a widget with:
-
-| Field           | Value          |
-| --------------- | -------------- |
-| Service         | GitHub         |
-| Widget          | Recent commits |
-| Repository      | `react/react`  |
-| Number of items | `5`            |
-| Refresh every   | `5 minutes`    |
-
-Enter repositories as `owner/repository`, without the `https://github.com/` prefix.
-Placeholder text in an input is an example, not a submitted value.
+`/health` checks the database. `/about.json` exposes the client IP, current Unix
+timestamp and service/widget catalogue used to build the configuration forms.
 
 ## Services and widgets
 
-Every widget supports its own refresh interval in addition to these parameters:
+| Service | Widget | Parameters | Displays |
+| --- | --- | --- | --- |
+| Weather | City temperature | City | Current temperature in °C |
+| Weather | Weather conditions | City | Current weather description |
+| Weather | Precipitation | City | Current precipitation in mm |
+| GitHub | Recent commits | Repository, item count | Commit messages, authors and links |
+| GitHub | Open issues | Repository | Open issue count, excluding pull requests |
+| GitHub | Repository stars | Repository | Star count |
+| RSS | Latest stories | Feed URL, item count | Article titles and links |
+| RSS | Feed article count | Feed URL | Entries currently available in the feed |
+| RSS | Latest article | Feed URL | First entry as ordered by the feed |
 
-| Service | Widget             | Parameters             | Displays                                        |
-| ------- | ------------------ | ---------------------- | ----------------------------------------------- |
-| Weather | City temperature   | City                   | Current temperature in °C                       |
-| Weather | Weather conditions | City                   | Current weather description                     |
-| Weather | Precipitation      | City                   | Current precipitation in mm                     |
-| GitHub  | Recent commits     | Repository, item count | Commit messages, authors and links              |
-| GitHub  | Open issues        | Repository             | Open issue count, excluding pull requests       |
-| GitHub  | Repository stars   | Repository             | Repository star count                           |
-| RSS     | Latest stories     | Feed URL, item count   | Recent article titles and links                 |
-| RSS     | Feed article count | Feed URL               | Number of entries currently present in the feed |
-| RSS     | Latest article     | Feed URL               | The newest entry as ordered by the feed         |
+Weather comes from Open-Meteo, GitHub from its REST API, and feeds are fetched
+and parsed by the backend. The browser only requests the application's API;
+feed-origin browser CORS permission is not needed. Feed format support depends
+on the server parser. Item counts accept **1–20**.
 
-Weather data comes from Open-Meteo. GitHub widgets use its public REST API.
-RSS widgets support RSS and Atom feeds that allow cross-origin browser access.
-Item-count inputs accept **1–20** entries.
+For a GitHub commits widget, enter `facebook/react` (or
+`https://github.com/facebook/react`), choose 5 items and a 5-minute interval.
+The UI normalizes repository URLs to `owner/repository`. Enter a value yourself:
+placeholder text is not submitted.
 
 ## Architecture
 
-The browser requests authentication and saved widget settings from the Node.js
-server. The server persists accounts, sessions and widget instances in SQLite.
-Currently, the browser fetches displayed widget data directly from external
-providers. Moving those requests to the backend is part of the roadmap.
+The browser manages views, forms, rendering and refresh schedules. The Node.js
+server handles authentication, service subscriptions, OAuth and external data
+requests. SQLite stores accounts, sessions, service credentials and widgets.
 
-| Layer              | Technology                        | Purpose                                            |
-| ------------------ | --------------------------------- | -------------------------------------------------- |
-| Interface          | HTML, CSS, JavaScript modules     | Responsive views, forms and widget rendering       |
-| Application server | Node.js built-in HTTP module      | JSON API and static file serving                   |
-| Persistence        | SQLite with `better-sqlite3`      | Accounts, sessions and widget configurations       |
-| Authentication     | Node.js `crypto`, cookie sessions | Salted scrypt password hashes and session handling |
-| Browser tests      | Playwright                        | User-flow and integration checks                   |
-| Packaging          | Docker and Docker Compose         | Consistent application startup                     |
+| Path | Responsibility |
+| --- | --- |
+| `public/index.html` | Pages, navigation, forms and dialogs |
+| `public/styles.css` | Visual design, responsive layout and focus styles |
+| `public/app.js` | UI state, authentication, subscriptions, OAuth flow, widget CRUD and timers |
+| `public/api.js` | Shared JSON requests, HTTP errors, timeouts and empty responses |
+| `public/data.js` | Validation and safe rendering of server-provided widget data |
+| `server/index.js` | Node HTTP routes, static files and service catalogue |
+| `server/auth.js` | Accounts, verification and cookie sessions |
+| `server/providers.js` | External providers and structured widget data |
+| `server/database.js`, `server/schema.js` | SQLite initialization and schema |
+| `tests/frontend.cjs` | Browser integration tests |
+| `tests/widgets-api.cjs` | Widget API regression tests |
+| `docs/` | Frontend handoff, push instructions and bootstrap documentation |
 
-Native JavaScript keeps the frontend compatible with the existing server without
-an additional build system. SQLite provides local persistence without a separate
-database service. Playwright is a development dependency and is not installed in
-the production Docker image.
+No UI framework or bundler is required. SQLite uses `better-sqlite3`; browser
+tests use Playwright, a development-only dependency. The older `auth/`, `books/`
+and `weather.js` exercises are separate from the app started by `npm start`.
 
-### Source layout
+### Persistence and recovery
 
-| Path                 | Responsibility                                             |
-| -------------------- | ---------------------------------------------------------- |
-| `public/index.html`  | Pages, navigation, forms and dialogs                       |
-| `public/styles.css`  | Visual design and responsive layouts                       |
-| `public/app.js`      | UI state, authentication, widget CRUD, ordering and timers |
-| `public/data.js`     | Provider adapters, data formatting and safe rendering      |
-| `server/index.js`    | HTTP routes, static files and service catalogue            |
-| `server/auth.js`     | Registration, verification and session management          |
-| `server/database.js` | SQLite connection and initialization                       |
-| `server/schema.js`   | Database schema                                            |
-| `tests/frontend.cjs` | Browser integration tests                                  |
-| `docs/`              | Implementation notes and bootstrap documentation           |
-
-The `auth/`, `books/` and `weather.js` files contain earlier bootstrap exercises.
-They are separate from the Dashboard application started by `npm start`.
-
-### Persistence and sessions
-
-- Accounts, sessions, widget configurations and positions are stored in SQLite
-- Session cookies are `HttpOnly` and `SameSite=Lax`; sessions last seven days
-- Verification tokens expire after 24 hours and are single-use
-- Enabled-service preferences currently use per-account browser localStorage
-- Each widget has its own timer; pending requests and timers are cancelled when
-  the dashboard is rebuilt or the user signs out
+- Service preferences, widget settings and order are stored per account on the server.
+- Session cookies are `HttpOnly` and `SameSite=Lax`; sessions last seven days.
+- Confirmation codes are single-use and expire after 24 hours.
+- Each widget has a separate timer and abortable request, with a 15-second UI timeout.
+- Failed updates retain the last valid result and label it as stale.
+- A GitHub authorization error offers reconnection and pauses that widget's timer.
+- Session expiry closes dialogs, cancels requests/timers and returns to sign-in.
+- Reordering saves individual positions; the backend has no atomic bulk reorder.
 
 ## API overview
 
-| Method | Endpoint                | Purpose                                               |
-| ------ | ----------------------- | ----------------------------------------------------- |
-| GET    | `/health`               | Database health check                                 |
-| GET    | `/about.json`           | Service and widget catalogue                          |
-| POST   | `/auth/register`        | Create an unconfirmed account                         |
-| POST   | `/auth/verify`          | Confirm registration                                  |
-| POST   | `/auth/login`           | Create a session                                      |
-| POST   | `/auth/logout`          | End the current session                               |
-| GET    | `/api/me`               | Get the authenticated user                            |
-| GET    | `/api/github`           | Get GitHub connection status and username             |
-| GET    | `/auth/github/connect`  | Start GitHub OAuth for the authenticated user         |
-| GET    | `/auth/github/callback` | Validate OAuth state and finish the GitHub connection |
-| DELETE | `/api/github`           | Remove the current user's GitHub connection           |
-| GET    | `/api/widgets`          | List the user's widget instances                      |
-| GET    | `/api/widgets/:id/data` | Fetch structured data for the user's widget           |
-| POST   | `/api/widgets`          | Create a widget instance                              |
-| PATCH  | `/api/widgets/:id`      | Update a widget or its position                       |
-| DELETE | `/api/widgets/:id`      | Remove a widget; returns HTTP 204                     |
+| Method | Endpoint | Purpose |
+| --- | --- | --- |
+| GET | `/health` | Database health |
+| GET | `/about.json` | Service/widget catalogue |
+| POST | `/auth/register` | Create an unconfirmed account |
+| POST | `/auth/verify` | Confirm a registration code |
+| POST | `/auth/login` | Start a session |
+| POST | `/auth/logout` | End a session |
+| GET | `/api/me` | Current user |
+| GET | `/api/services` | Current subscriptions |
+| POST | `/api/services/:name/enable` | Enable a service |
+| DELETE | `/api/services/:name` | Disable an unused service |
+| GET | `/api/github` | GitHub connection status |
+| GET | `/auth/github/connect` | Obtain an OAuth authorization URL |
+| GET | `/auth/github/callback` | Complete OAuth |
+| DELETE | `/api/github` | Remove GitHub credentials |
+| GET / POST | `/api/widgets` | List / create widgets |
+| PATCH / DELETE | `/api/widgets/:id` | Update / remove a widget |
+| GET | `/api/widgets/:id/data` | Structured data from its saved configuration |
 
-All `/api/` routes require an authenticated session. Request bodies use JSON.
-Widget data is fetched server-side from the saved widget configuration. GitHub
-uses the connected account, and RSS requests are protected against internal
-addresses, oversized responses, long requests and redirect chains.
+All `/api/` routes require a session. JSON bodies are used where applicable;
+widget deletion returns an empty HTTP 204. Backend validation enforces widget
+parameters, subscriptions and ownership. RSS requests have internal-address,
+response-size, timeout and redirect protections.
 
 ## Configuration
 
-No environment configuration is required for the default local setup.
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `PORT` | `8080` | Local server port |
+| `GITHUB_CLIENT_ID` | Unset | OAuth App client ID |
+| `GITHUB_CLIENT_SECRET` | Unset | OAuth App secret |
+| `GITHUB_CALLBACK_URL` | Derived from request host | Explicit OAuth callback URL |
+| `TEST_PORT` | `8187` frontend / `8188` API | Isolated test server port |
+| `CHROMIUM_PATH` | Unset | Optional existing Chromium executable |
+| `SCREENSHOT_DIR` | Unset | Optional frontend test screenshots |
 
-| Variable               | Default                       | Purpose                                         |
-| ---------------------- | ----------------------------- | ----------------------------------------------- |
-| `PORT`                 | `8080`                        | Application server port                         |
-| `TEST_PORT`            | `8187`                        | Isolated server port used by browser tests      |
-| `SCREENSHOT_DIR`       | Unset                         | Optional directory for test screenshots         |
-| `CHROMIUM_PATH`        | Unset                         | Optional existing Chromium executable for tests |
-| `GITHUB_CLIENT_ID`     | Unset                         | GitHub OAuth application client ID              |
-| `GITHUB_CLIENT_SECRET` | Unset                         | GitHub OAuth application secret                 |
-| `GITHUB_CALLBACK_URL`  | Derived from the request host | Optional OAuth callback URL                     |
-
-For example, on Linux, macOS or WSL:
-
-```bash
-PORT=8081 npm start
-```
-
-This changes the local npm server port. The supplied Compose configuration still
-uses port 8080, as required by the project brief.
+For example, `PORT=8081 npm start` changes the local port. The supplied Docker
+Compose configuration uses port 8080. Never commit `.env`, credentials, generated
+databases, local account files or `node_modules`.
 
 ## Testing
-
-Install dependencies and the test browser, then run the suite:
 
 ```bash
 npm ci
 npx playwright install chromium
 npm run test:frontend
+npm run test:widgets-api
 ```
 
-If Linux browser dependencies are missing:
+If Chromium needs Linux system dependencies, use
+`npx playwright install --with-deps chromium`.
 
-```bash
-npx playwright install --with-deps chromium
-```
+Both suites start isolated servers and temporary databases; do not start the
+app for them. Your normal accounts and widgets are untouched. The frontend
+suite tests real authentication, subscriptions, OAuth routes and widget CRUD.
+GitHub authorization, token/profile responses and widget data use controlled
+fixtures; no real keys or external provider access are needed.
 
-Tests start an isolated server and temporary SQLite database. You do not need to
-run `npm start` first, and your normal accounts and widgets are not modified.
+Coverage includes expired/invalid confirmation codes, confirmation links,
+subscription persistence and conflicts, OAuth cancellation/success, GitHub
+reconnection, all nine renderers, unsafe content, malformed data, independent
+timers, stale data, ordering, editing/deletion, mobile layout and session expiry.
+See [the verification notes](docs/frontend.md) for scope and limitations.
 
-The suite covers registration and confirmation, all nine widget renderers,
-independent configurations and refresh timers, editing and deletion, persisted
-ordering, drag-and-drop, filters, error recovery, unsafe RSS content, mobile
-layout, dialog keyboard interaction, logout and session expiry.
+## Delivery status
 
-**External provider responses are mocked.** These checks verify the application
-flow; live integrations, Docker startup and complete accessibility compliance
-must also be checked separately. Verification notes are recorded in
-[docs/frontend.md](docs/frontend.md).
+| Area | Status |
+| --- | --- |
+| Frontend integration with existing APIs | Implemented and covered by browser tests |
+| Server subscriptions, widget data and GitHub OAuth | Present in the supplied backend and integrated into the UI |
+| Account confirmation | Code entry and `/?verify_token=...` links work; email delivery and resend API are missing |
+| Live provider / OAuth credentials | Must be checked with the team's environment before the demo |
+| Docker startup | Configuration supplied; not executed in this verification environment |
+| Accessibility | Keyboard and responsive checks passed; no full assistive-technology audit |
 
-## Current limitations
-
-| Area                  | Current behavior                                                                        |
-| --------------------- | --------------------------------------------------------------------------------------- |
-| Service subscriptions | Enabled services are browser preferences, not server-side subscriptions                 |
-| GitHub authorization  | Authenticated users can connect one GitHub account; OAuth tokens remain server-side     |
-| RSS access            | Feeds are fetched server-side with SSRF, size, timeout and redirect protections         |
-| Account confirmation  | Uses a development code returned by the API; does not verify email ownership            |
-| Widget ordering       | Positions are saved through individual requests; a failed reorder can partially persist |
-| External availability | Provider outages and rate limits can prevent updates                                    |
-
-The two-person assignment requires at least **3 services and 6 configurable
-widget types**. The current catalogue exceeds the widget count, but the remaining
-integration work still needs to be completed and demonstrated.
-
-## Roadmap
-
-- [ ] Persist service subscriptions and enforce them on the backend
-- [ ] Link GitHub accounts through OAuth and keep tokens server-side
-- [x] Provide server-side widget data endpoints, including a protected RSS proxy
-- [ ] Send registration confirmation emails and support controlled resending
-- [ ] Strengthen API validation, including partial widget updates
-- [x] Connect the frontend to the new subscription, authorization and data endpoints
-- [ ] Verify Docker startup and the complete workflow against real providers
-- [ ] Prepare the final demonstration and update documentation to match the delivered version
+The catalogue has **3 services and 9 widget types**; the two-person assignment
+requires at least 3 services and 6 widgets. Counts alone do not establish full
+assignment completion: email delivery and final live demonstration remain.
 
 ## Troubleshooting
 
-| Problem                             | What to check                                                                                          |
-| ----------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| `EADDRINUSE` on startup             | Another process is using the port. Stop it or use a different local `PORT`                             |
-| Repository validation error         | Enter `owner/repository`; do not paste a full URL or leave the placeholder untouched                   |
-| GitHub source not found             | Check the repository name and whether it is public                                                     |
-| Service rate limit reached          | Increase the refresh interval and wait before retrying                                                 |
-| RSS cannot load                     | Check that the address returns RSS/Atom and allows browser access; a backend proxy is needed otherwise |
-| Account cannot sign in              | Confirm registration first and use the username, not the email address                                 |
-| Chromium executable missing         | Run `npx playwright install chromium`                                                                  |
-| `better-sqlite3` installation fails | Check the Node.js version; native compilation may require Python and C/C++ build tools                 |
+| Problem | Action |
+| --- | --- |
+| `EADDRINUSE` | Stop the other server or change the local port |
+| GitHub connection is not configured | Set both OAuth credentials and restart the server |
+| GitHub callback error | Check callback URL and host; retry from Services; expired state/provider errors may appear as backend JSON |
+| GitHub needs reconnection | Use **Reconnect GitHub** in Services or the widget |
+| Cannot disable a service | Remove its widgets first; use **Disconnect** if you only want to unlink GitHub |
+| Repository validation error | Enter `owner/repository` or a repository-root GitHub URL |
+| Data unavailable / rate limit | Check configuration, retry later or increase the refresh interval |
+| RSS cannot load | Use a public RSS/Atom URL; private addresses and unsupported feed responses are rejected |
+| Sign-in rejected | Confirm the account first; sign in with username, not email |
+| Chromium missing | Run `npx playwright install chromium` |
+| `better-sqlite3` fails to install | Check Node version; native builds may require Python and C/C++ tools |
 
 ## Further documentation
 
-- [Frontend implementation and verification](docs/frontend.md)
-- [Original bootstrap exercises](docs/bootstrap.md)
+- [Frontend implementation, verification and backend handoff](docs/frontend.md)
 - [Branch and push instructions in Russian](docs/PUSH_RU.md)
+- [Original bootstrap exercises](docs/bootstrap.md)
 - [Technology decision matrix](decision-matrix.md)
-
-Keep credentials, local account files such as `auth/users.json`, generated
-SQLite databases and dependency folders out of version control.
