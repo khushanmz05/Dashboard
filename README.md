@@ -267,6 +267,5 @@ assignment completion: email delivery and final live demonstration remain.
 ## Further documentation
 
 - [Frontend implementation, verification and backend handoff](docs/frontend.md)
-- [Branch and push instructions in Russian](docs/PUSH_RU.md)
 - [Original bootstrap exercises](docs/bootstrap.md)
 - [Technology decision matrix](decision-matrix.md)
