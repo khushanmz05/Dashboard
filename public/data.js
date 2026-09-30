@@ -1,4 +1,5 @@
-// Public, credential-free integrations. Private providers belong on the backend.
+// Render server-owned widget data. External requests and tokens stay on the backend.
+import { requestJSON, ApiError } from "./api.js";
 export const serviceInfo = {
   weather: {
     title: "Weather",
@@ -40,17 +41,18 @@ export const escapeHTML = (value) =>
 export function safeUrl(value) {
   try {
     const url = new URL(value);
-    return ["http:", "https:"].includes(url.protocol) ? url.href : null;
+    return ["http:", "https:"].includes(url.protocol) && !url.username && !url.password ? url.href : null;
   } catch {
     return null;
   }
 }
-const count = (value) => Math.min(20, Math.max(1, Number(value) || 5));
 const number = (value) => new Intl.NumberFormat("en").format(value);
 const caption = (text) => `<p class="metric-caption">${escapeHTML(text)}</p>`;
 const metric = (value, unit, text) =>
   `<div class="metric">${escapeHTML(value)}<small>${escapeHTML(unit)}</small></div>${caption(text)}`;
 function list(items) {
+  if (!Array.isArray(items) || items.some((item) => !item || typeof item.title !== "string"))
+    throw new Error("The server returned an invalid list response.");
   if (!items.length) return caption("Nothing to show yet. Check back later.");
   return `<ul class="widget-links">${items
     .map((item) => {
@@ -60,6 +62,7 @@ function list(items) {
     .join("")}</ul>`;
 }
 function weatherLabel(code) {
+  if (!Number.isInteger(code) || code < 0) return "Weather unavailable";
   if (code === 0) return "Clear sky";
   if (code <= 3)
     return ["Clear sky", "Mainly clear", "Partly cloudy", "Overcast"][code];
@@ -73,9 +76,12 @@ function weatherLabel(code) {
   return "Weather unavailable";
 }
 export function renderWidgetData(item, data) {
+  if (!data || typeof data !== "object") throw new Error("The server returned no widget data.");
+  if (data.type === "metric" && !Number.isFinite(data.value)) throw new Error("The metric is currently unavailable.");
+  if (data.type === "weather" && ((item.widget_name === "city_temperature" && !Number.isFinite(data.temperature)) || (item.widget_name === "precipitation" && !Number.isFinite(data.precipitation)))) throw new Error("Current weather data is unavailable.");
   if (data.type === "metric")
     return metric(number(data.value), data.unit, data.caption);
-  if (data.type === "list") return list(data.items || []);
+  if (data.type === "list") return list(data.items);
   if (data.type === "weather") {
     const symbol = `<span class="weather-symbol" aria-hidden="true">${data.weather_code <= 2 ? "☀" : "☁"}</span>`;
     const place = `${weatherLabel(data.weather_code)} · ${data.city}`;
@@ -95,20 +101,7 @@ export function renderWidgetData(item, data) {
   throw new Error("The server returned an unsupported widget response.");
 }
 export async function loadWidgetData(item, signal) {
-  const response = await fetch(
-    `/api/widgets/${encodeURIComponent(item.id)}/data`,
-    {
-      signal,
-      credentials: "same-origin",
-    },
-  );
-  let result;
-  try {
-    result = await response.json();
-  } catch {
-    throw new Error("The server returned an invalid widget response.");
-  }
-  if (!response.ok)
-    throw new Error(result.error || "Could not load widget data.");
+  const result = await requestJSON(`/api/widgets/${encodeURIComponent(item.id)}/data`, { signal });
+  if (!result?.data) throw new ApiError("The server returned no widget data.");
   return renderWidgetData(item, result.data);
 }

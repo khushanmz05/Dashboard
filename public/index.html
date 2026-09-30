@@ -102,7 +102,7 @@
             </button>
           </form>
           <form id="verify-form" hidden>
-            <div class="notice">
+            <div id="verification-notice" class="notice">
               Your account is created. Confirm your registration below before
               signing in. This development server provides the code directly; it
               does not send an email.
@@ -246,16 +246,28 @@
               <p class="eyebrow">CONNECT YOUR WORLD</p>
               <h1>A place for everything<span class="heading-dot">.</span></h1>
               <p class="muted">
-                Choose the public services you want in your workspace.
+                Choose your sources and manage connected accounts.
               </p>
             </div>
           </div>
+          <p id="services-message" class="form-message" role="status" tabindex="-1"></p>
           <div id="services-grid" class="services-grid"></div>
-          <p class="integration-note">
-            Service choices are saved in this browser for your account. GitHub
-            uses public repositories. Private account connections require
-            backend OAuth integration.
-          </p>
+          <div id="github-panel" class="account-card github-panel">
+            <span class="badge">Connected account</span>
+            <h2>GitHub</h2>
+            <p class="muted">Connect your GitHub account to load repository widgets. The current connection grants access to public repositories.</p>
+            <p id="github-connection-status" class="muted">Not connected</p>
+            <button id="github-connect" data-github-connect class="primary">Connect GitHub</button>
+            <button id="github-disconnect" data-github-disconnect class="text-button" hidden>
+              Disconnect GitHub
+            </button>
+            <p
+              id="github-connection-message"
+              class="form-message"
+              role="status"
+            ></p>
+          </div>
+          <p class="integration-note">Service choices are saved to your account and shared across browsers. Remove a service's widgets before disabling it.</p>
         </section>
         <section id="account-page" hidden>
           <div class="page-heading">
@@ -265,6 +277,7 @@
               <p class="muted">One account. A space that is yours.</p>
             </div>
           </div>
+          <p id="account-message" class="form-message" role="status"></p>
           <div class="account-card">
             <span class="badge">Verified account</span>
             <h2>Profile</h2>
@@ -278,20 +291,7 @@
               Your widget configurations and order are saved to your account.
             </p>
           </div>
-          <div class="account-card">
-            <span class="badge">Private integration</span>
-            <h2>GitHub</h2>
-            <p id="github-connection-status" class="muted">Not connected</p>
-            <button id="github-connect" class="primary">Connect GitHub</button>
-            <button id="github-disconnect" class="text-button" hidden>
-              Disconnect GitHub
-            </button>
-            <p
-              id="github-connection-message"
-              class="form-message"
-              role="status"
-            ></p>
-          </div>
+          <button class="secondary" data-view="services">Manage connected services</button>
         </section>
       </main>
     </div>
@@ -360,6 +360,14 @@
             Keep widget</button
           ><button class="danger">Remove widget</button>
         </div>
+      </form>
+    </dialog>
+    <dialog id="disconnect-dialog" aria-labelledby="disconnect-title">
+      <form id="disconnect-form">
+        <div class="dialog-header"><h2 id="disconnect-title">Disconnect GitHub?</h2><button type="button" class="icon-button" data-close="disconnect-dialog" aria-label="Close confirmation">×</button></div>
+        <p class="muted">Your GitHub widgets will stay on the dashboard, but they will stop updating until you reconnect. Your service subscription stays enabled.</p>
+        <p id="disconnect-message" class="form-message" role="alert"></p>
+        <div class="dialog-actions"><button type="button" class="secondary" data-close="disconnect-dialog">Keep connected</button><button class="danger">Disconnect</button></div>
       </form>
     </dialog>
     <script type="module" src="/app.js"></script>
