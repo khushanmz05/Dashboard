@@ -179,7 +179,10 @@ function tagValue(source, tag) {
   const match = source.match(
     new RegExp(`<(${tag})(?:\\s[^>]*)?>([\\s\\S]*?)</\\1>`, "i"),
   );
-  return match ? decodeXml(match[2].replace(/<[^>]+>/g, " ")) : "";
+  if (!match) return "";
+  // Unwrap CDATA first so markup stripping does not remove the entire title.
+  const content = match[2].replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1");
+  return decodeXml(content.replace(/<[^>]+>/g, " "));
 }
 
 function parseRss(xml, limit, baseUrl) {
