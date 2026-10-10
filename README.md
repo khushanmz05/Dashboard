@@ -168,11 +168,44 @@ requests. SQLite stores accounts, sessions, service credentials and widgets.
 | `server/database.js`, `server/schema.js` | SQLite initialization and schema                                            |
 | `tests/frontend.cjs`                     | Browser integration tests                                                   |
 | `tests/widgets-api.cjs`                  | Widget API regression tests                                                 |
-| `docs/`                                  | Frontend handoff, push instructions and bootstrap documentation             |
+| `docs/`                                  | Guides, technology decisions and historical verification notes             |
+| `examples/bootstrap/`                    | Standalone authentication, books API and weather exercises                  |
+| `docker/`                                | Backend/frontend Dockerfiles and Nginx configuration                        |
 
 No UI framework or bundler is required. SQLite uses `better-sqlite3`; browser
-tests use Playwright, a development-only dependency. The older `auth/`, `books/`
-and `weather.js` exercises are separate from the app started by `npm start`.
+tests use Playwright, a development-only dependency. The original exercises live in `examples/bootstrap/` and run independently.
+See [the bootstrap guide](docs/bootstrap.md) for their commands.
+
+### Repository layout
+
+```text
+.
+├── public/                  # Browser interface and static assets
+├── server/                  # Application API, authentication and database
+├── tests/                   # Browser and API regression tests
+├── docker/                  # Container images and Nginx configuration
+├── examples/
+│   └── bootstrap/           # Original standalone exercises
+│       ├── auth/
+│       ├── books/
+│       └── weather.js
+├── docs/
+│   ├── bootstrap.md         # Exercise setup and usage
+│   ├── frontend.md          # Frontend implementation and handoff
+│   ├── decisions/           # Decision matrix and original spreadsheet
+│   └── verification/        # Historical exercise verification log
+├── docker-compose.yml      # Start the complete container stack
+├── package.json            # Dependencies and application/test commands
+├── package-lock.json       # Locked dependency versions
+├── .env.example            # Local configuration template
+└── README.md
+```
+
+Run application, test and Compose commands from the repository root. Compose
+uses the Dockerfiles in `docker/` with the repository root as its build context.
+For individual images, use `docker build -f docker/Dockerfile .` or
+`docker build -f docker/Dockerfile.frontend .` from the root.
+Runtime data is generated in `data/` and is excluded from version control.
 
 ### Persistence and recovery
 
@@ -289,4 +322,6 @@ assignment completion: email delivery and final live demonstration remain.
 
 - [Frontend implementation, verification and backend handoff](docs/frontend.md)
 - [Original bootstrap exercises](docs/bootstrap.md)
-- [Technology decision matrix](decision-matrix.md)
+- [Technology decision matrix](docs/decisions/decision-matrix.md)
+- [Original decision-matrix spreadsheet](docs/decisions/Bootstrap_Decision_Matrix_khushan.xlsx)
+- [Historical bootstrap verification log](docs/verification/bootstrap.txt)

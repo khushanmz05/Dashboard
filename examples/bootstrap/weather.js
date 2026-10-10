@@ -12,7 +12,7 @@ async function main() {
   let city = DEFAULT_CITY;
   if (args.length) {
     if (args.length !== 2 || args[0] !== '--city' || !args[1].trim())
-      throw new Error('usage: node weather.js --city "City name"');
+      throw new Error('usage: node examples/bootstrap/weather.js --city "City name"');
     city = args[1].trim();
   }
   const query = new URLSearchParams({name: city, count: '1', language: 'en', format: 'json'});

@@ -7,6 +7,6 @@ data
 *.sqlite-shm
 *.sqlite-wal
 cookies.txt
-auth/users.json
+examples/
 tests
 docs
