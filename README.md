@@ -293,6 +293,7 @@ npm ci
 npx playwright install chromium
 npm run test:frontend
 npm run test:widgets-api
+node --test tests/rss.cjs
 ```
 
 If Chromium needs Linux system dependencies, use
@@ -318,7 +319,7 @@ See [the verification notes](docs/frontend.md) for scope and limitations.
 | Server subscriptions, widget data and GitHub OAuth | Present in the supplied backend and integrated into the UI                                |
 | Account confirmation                               | Code entry and `/?verify_token=...` links work; email delivery and resend API are missing |
 | Live provider / OAuth credentials                  | Must be checked with the team's environment before the demo                               |
-| Docker startup                                     | Automatic Compose build/start configured; current images require verification on a Docker host |
+| Docker startup                                     | Production images built on Hetzner; both containers healthy and live HTTP/API checks passed |
 | Lighthouse                                         | Desktop and mobile performance/accessibility scores reached 100/100                       |
 | Accessibility                                      | Lighthouse checks passed; a full assistive-technology audit remains separate              |
 
@@ -349,3 +350,5 @@ assignment completion: email delivery and final live demonstration remain.
 - [Technology decision matrix](docs/decisions/decision-matrix.md)
 - [Original decision-matrix spreadsheet](docs/decisions/Bootstrap_Decision_Matrix_khushan.xlsx)
 - [Historical bootstrap verification log](docs/verification/bootstrap.txt)
+
+- [Server deployment and domain setup](docs/deployment.md)
