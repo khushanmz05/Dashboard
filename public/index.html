@@ -331,24 +331,31 @@
           </button>
         </div>
         <p class="muted">Choose a source, make it personal, set its pace.</p>
-        <label>Service<select id="service" required></select></label
-        ><label>Widget<select id="widget" required></select></label>
-        <p id="widget-description" class="field-help"></p>
-        <div id="configuration"></div>
-        <label
-          >Refresh every<select id="refresh-rate">
+        <fieldset class="form-section">
+          <legend>Widget source</legend>
+          <div class="form-grid">
+            <label for="service">Service<select id="service" required></select></label>
+            <label for="widget">Widget<select id="widget" required></select></label>
+          </div>
+        </fieldset>
+        <fieldset class="form-section">
+          <legend>Configuration</legend>
+          <p id="widget-description" class="field-help"></p>
+          <div id="configuration"></div>
+        </fieldset>
+        <fieldset class="form-section">
+          <legend>Refresh schedule</legend>
+          <label for="refresh-rate"
+            >Refresh every<select id="refresh-rate">
             <option value="10">10 seconds</option>
             <option value="30">30 seconds</option>
             <option value="60">1 minute</option>
             <option value="300" selected>5 minutes</option>
             <option value="900">15 minutes</option>
             <option value="3600">1 hour</option>
-          </select></label
-        >
-        <p class="field-help">
-          Short intervals can reach service rate limits. Five minutes is a good
-          start.
-        </p>
+          </select></label>
+          <p class="field-help">Short intervals can reach service rate limits. Five minutes is a good start.</p>
+        </fieldset>
         <p id="widget-message" class="form-message" role="alert"></p>
         <div class="dialog-actions">
           <button type="button" class="secondary" data-close="widget-dialog">

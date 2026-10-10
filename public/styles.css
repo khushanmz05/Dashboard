@@ -885,6 +885,32 @@ dialog::backdrop {
   color: var(--muted);
   margin-top: -7px;
 }
+.form-section {
+  border: 0;
+  border-top: 1px solid var(--line);
+  margin: 24px 0 0;
+  padding: 20px 0 0;
+}
+.form-section legend {
+  padding: 0 8px 0 0;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 700;
+}
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+.form-field {
+  margin-bottom: 16px;
+}
+.form-section > .field-help {
+  margin: 0 0 16px;
+}
+.form-section .form-field:last-child {
+  margin-bottom: 0;
+}
 .skip-link {
   position: fixed;
   left: 15px;
@@ -1054,6 +1080,9 @@ dialog::backdrop {
   .section-toolbar > .text-button {
     font-size: 10px;
     white-space: nowrap;
+  }
+  .form-grid {
+    grid-template-columns: 1fr;
   }
   .auth-layout {
     display: block;

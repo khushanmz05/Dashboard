@@ -269,8 +269,17 @@ function renderParameters(values = {}) {
   };
   $("#configuration").innerHTML = (widget?.params || [])
     .map(
-      (param) =>
-        `<label>${esc({ link: "Feed URL", number: "Number of items", repository: "Repository (owner/name)", city: "City" }[param.name] || label(param.name))}<input data-param="${esc(param.name)}" type="${param.type === "integer" ? "number" : param.name === "link" ? "url" : "text"}" ${param.type === "integer" ? 'step="1" min="1" max="20"' : 'maxlength="2048"'} placeholder="${esc(hints[param.name] || "")}" value="${esc(values[param.name] ?? (param.type === "integer" ? 5 : ""))}" required></label>`,
+      (param) => {
+        const inputId = `widget-param-${param.name}`;
+        const title =
+          {
+            link: "Feed URL",
+            number: "Number of items",
+            repository: "Repository (owner/name)",
+            city: "City",
+          }[param.name] || label(param.name);
+        return `<label for="${esc(inputId)}" class="form-field">${esc(title)}<input id="${esc(inputId)}" data-param="${esc(param.name)}" type="${param.type === "integer" ? "number" : param.name === "link" ? "url" : "text"}" ${param.type === "integer" ? 'step="1" min="1" max="20"' : 'maxlength="2048"'} placeholder="${esc(hints[param.name] || "")}" value="${esc(values[param.name] ?? (param.type === "integer" ? 5 : ""))}" required></label>`;
+      },
     )
     .join("");
   if (service?.name === "rss")
