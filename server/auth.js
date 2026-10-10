@@ -124,6 +124,60 @@ function authenticate(username, password) {
   return { user, token: createSession(user.id) };
 }
 
+function getUserByGithubId(githubId) {
+  return database
+    .prepare(
+      `
+    SELECT users.id, users.username, users.email
+    FROM user_services
+    JOIN users ON users.id = user_services.user_id
+    WHERE user_services.service_name = 'github'
+      AND json_extract(user_services.credentials_json, '$.github_id') = ?
+  `,
+    )
+    .get(String(githubId));
+}
+
+function createGithubUser({
+  username,
+  email,
+  githubId,
+  githubUsername,
+  token,
+}) {
+  const id = crypto.randomUUID();
+  const unusablePassword = hashPassword(crypto.randomBytes(32).toString("hex"));
+
+  database.transaction(() => {
+    database
+      .prepare(
+        `
+      INSERT INTO users (id, username, email, password_hash, is_verified)
+      VALUES (?, ?, ?, ?, 1)
+    `,
+      )
+      .run(id, username, email, unusablePassword);
+    database
+      .prepare(
+        `
+      INSERT INTO user_services (user_id, service_name, credentials_json)
+      VALUES (?, 'weather', NULL), (?, 'github', ?)
+    `,
+      )
+      .run(
+        id,
+        id,
+        JSON.stringify({
+          github_id: String(githubId),
+          username: githubUsername,
+          token,
+        }),
+      );
+  })();
+
+  return { id, token: createSession(id) };
+}
+
 function getUserFromSession(token) {
   if (!token) return null;
 
@@ -229,6 +283,9 @@ module.exports = {
   createUser,
   verifyUser,
   authenticate,
+  createSession,
+  getUserByGithubId,
+  createGithubUser,
   getUserFromSession,
   deleteSession,
   getGithubConnection,

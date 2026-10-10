@@ -9,6 +9,9 @@ const {
   createUser,
   verifyUser,
   authenticate,
+  createSession,
+  getUserByGithubId,
+  createGithubUser,
   getUserFromSession,
   deleteSession,
   getGithubConnection,
@@ -257,10 +260,7 @@ function validateConfiguration(serviceName, widgetName, configuration) {
       if (!Number.isInteger(value))
         throw new HttpError(400, `Invalid ${param.name}`);
       if (param.min !== undefined && value < param.min)
-        throw new HttpError(
-          400,
-          `${param.name} must be at least ${param.min}`,
-        );
+        throw new HttpError(400, `${param.name} must be at least ${param.min}`);
       if (param.max !== undefined && value > param.max)
         throw new HttpError(400, `${param.name} must be at most ${param.max}`);
       sanitized[param.name] = value;
@@ -301,19 +301,24 @@ function serveStatic(request, response, pathname) {
     ".js": "text/javascript; charset=utf-8",
     ".css": "text/css; charset=utf-8",
   };
-    const extension = path.extname(resolved);
-    const headers = {
-      "Content-Type": types[extension] || "application/octet-stream",
-      "Cache-Control": extension === ".html" ? "no-cache" : "public, max-age=3600",
-    };
-    const acceptsGzip = /\bgzip\b/.test(request.headers["accept-encoding"] || "");
-    if (acceptsGzip) {
-      response.writeHead(200, { ...headers, "Content-Encoding": "gzip", Vary: "Accept-Encoding" });
-      fs.createReadStream(resolved).pipe(zlib.createGzip()).pipe(response);
-    } else {
-      response.writeHead(200, headers);
-      fs.createReadStream(resolved).pipe(response);
-    }
+  const extension = path.extname(resolved);
+  const headers = {
+    "Content-Type": types[extension] || "application/octet-stream",
+    "Cache-Control":
+      extension === ".html" ? "no-cache" : "public, max-age=3600",
+  };
+  const acceptsGzip = /\bgzip\b/.test(request.headers["accept-encoding"] || "");
+  if (acceptsGzip) {
+    response.writeHead(200, {
+      ...headers,
+      "Content-Encoding": "gzip",
+      Vary: "Accept-Encoding",
+    });
+    fs.createReadStream(resolved).pipe(zlib.createGzip()).pipe(response);
+  } else {
+    response.writeHead(200, headers);
+    fs.createReadStream(resolved).pipe(response);
+  }
   return true;
 }
 
@@ -412,6 +417,7 @@ const server = http.createServer(async (request, response) => {
       const sessionToken = getCookies(request).session;
       const state = crypto.randomBytes(32).toString("hex");
       githubStates.set(state, {
+        mode: "connect",
         userId: user.id,
         sessionHash: crypto
           .createHash("sha256")
@@ -432,72 +438,210 @@ const server = http.createServer(async (request, response) => {
         { "Set-Cookie": sessionCookie("github_oauth_state", state, 600) },
       );
     }
+    if (request.method === "GET" && url.pathname === "/auth/github/login") {
+      if (!process.env.GITHUB_CLIENT_ID || !process.env.GITHUB_CLIENT_SECRET)
+        throw new HttpError(503, "GitHub login is not configured");
+      for (const [state, entry] of githubStates)
+        if (entry.expiresAt <= Date.now()) githubStates.delete(state);
+      const state = crypto.randomBytes(32).toString("hex");
+      githubStates.set(state, {
+        mode: "login",
+        expiresAt: Date.now() + GITHUB_STATE_DURATION,
+      });
+      const query = new URLSearchParams({
+        client_id: process.env.GITHUB_CLIENT_ID,
+        redirect_uri: githubCallbackUrl(request),
+        scope: "read:user user:email",
+        state,
+      });
+      return sendJson(
+        response,
+        200,
+        { url: `https://github.com/login/oauth/authorize?${query}` },
+        { "Set-Cookie": sessionCookie("github_login_state", state, 600) },
+      );
+    }
     if (request.method === "GET" && url.pathname === "/auth/github/callback") {
       const cookies = getCookies(request);
       const state = url.searchParams.get("state");
       const entry = state && githubStates.get(state);
-      const user = getUserFromSession(cookies.session);
+      const loginFlow = entry?.mode === "login";
+      const user = loginFlow ? null : getUserFromSession(cookies.session);
+      const stateCookie = loginFlow
+        ? cookies.github_login_state
+        : cookies.github_oauth_state;
       if (
-        !user ||
         !state ||
-        state !== cookies.github_oauth_state ||
+        state !== stateCookie ||
         !entry ||
         entry.expiresAt <= Date.now() ||
-        entry.userId !== user.id ||
-        entry.sessionHash !==
-          crypto
-            .createHash("sha256")
-            .update(cookies.session || "")
-            .digest("hex")
+        (!loginFlow &&
+          (!user ||
+            entry.userId !== user.id ||
+            entry.sessionHash !==
+              crypto
+                .createHash("sha256")
+                .update(cookies.session || "")
+                .digest("hex")))
       )
         throw new HttpError(400, "Invalid OAuth state");
       githubStates.delete(state);
       response.setHeader(
         "Set-Cookie",
-        sessionCookie("github_oauth_state", "", 0),
+        sessionCookie(
+          loginFlow ? "github_login_state" : "github_oauth_state",
+          "",
+          0,
+        ),
       );
       if (url.searchParams.get("error") || !url.searchParams.get("code")) {
         response.writeHead(302, {
-          Location: "/?github=denied",
+          Location: loginFlow ? "/?github=login_denied" : "/?github=denied",
           "Cache-Control": "no-store",
         });
         return response.end();
       }
-      const tokenResponse = await githubJson(
-        "https://github.com/login/oauth/access_token",
-        {
-          method: "POST",
-          headers: {
-            Accept: "application/json",
-            "Content-Type": "application/x-www-form-urlencoded",
+      const loginError = (message) => {
+        response.writeHead(302, {
+          Location: `/?github=login_error&message=${encodeURIComponent(message)}`,
+          "Cache-Control": "no-store",
+        });
+        response.end();
+      };
+      let tokenResponse;
+      try {
+        tokenResponse = await githubJson(
+          "https://github.com/login/oauth/access_token",
+          {
+            method: "POST",
+            headers: {
+              Accept: "application/json",
+              "Content-Type": "application/x-www-form-urlencoded",
+            },
+            body: new URLSearchParams({
+              client_id: process.env.GITHUB_CLIENT_ID,
+              client_secret: process.env.GITHUB_CLIENT_SECRET,
+              code: url.searchParams.get("code"),
+              redirect_uri: githubCallbackUrl(request),
+            }),
           },
-          body: new URLSearchParams({
-            client_id: process.env.GITHUB_CLIENT_ID,
-            client_secret: process.env.GITHUB_CLIENT_SECRET,
-            code: url.searchParams.get("code"),
-            redirect_uri: githubCallbackUrl(request),
-          }),
-        },
-      );
+        );
+      } catch (error) {
+        if (loginFlow) {
+          loginError(error.message);
+          return;
+        }
+        throw error;
+      }
       if (
         typeof tokenResponse.access_token !== "string" ||
         !tokenResponse.access_token
-      )
+      ) {
+        if (loginFlow) {
+          loginError("GitHub returned an invalid access token.");
+          return;
+        }
         throw new HttpError(502, "GitHub returned an invalid access token");
+      }
       const headers = {
         Authorization: `Bearer ${tokenResponse.access_token}`,
         Accept: "application/vnd.github+json",
         "User-Agent": "dashboard",
       };
-      const profile = await githubJson("https://api.github.com/user", {
-        headers,
-      });
+      let profile;
+      try {
+        profile = await githubJson("https://api.github.com/user", { headers });
+      } catch (error) {
+        if (loginFlow) {
+          loginError(error.message);
+          return;
+        }
+        throw error;
+      }
       if (
         !Number.isInteger(profile.id) ||
         typeof profile.login !== "string" ||
         !profile.login
-      )
+      ) {
+        if (loginFlow) {
+          loginError("GitHub returned an invalid account.");
+          return;
+        }
         throw new HttpError(502, "GitHub returned an invalid account");
+      }
+      if (loginFlow) {
+        let emails;
+        try {
+          emails = await githubJson("https://api.github.com/user/emails", {
+            headers,
+          });
+        } catch (error) {
+          loginError(error.message);
+          return;
+        }
+        const primaryEmail = Array.isArray(emails)
+          ? emails.find(
+              (item) =>
+                item?.primary &&
+                item?.verified &&
+                typeof item.email === "string",
+            )
+          : null;
+        if (!primaryEmail) {
+          loginError(
+            "GitHub needs a verified primary email to create an account.",
+          );
+          return;
+        }
+        const existing = getUserByGithubId(profile.id);
+        if (existing) {
+          response.setHeader("Set-Cookie", [
+            sessionCookie("github_login_state", "", 0),
+            sessionCookie(
+              "session",
+              createSession(existing.id),
+              SESSION_DURATION,
+            ),
+          ]);
+          response.writeHead(302, {
+            Location: "/?github=logged_in",
+            "Cache-Control": "no-store",
+          });
+          return response.end();
+        }
+        const email = primaryEmail.email.trim().toLowerCase();
+        if (
+          database.prepare("SELECT 1 FROM users WHERE email = ?").get(email)
+        ) {
+          loginError(
+            "This email already belongs to a dashboard account. Sign in with your password, then connect GitHub from Services.",
+          );
+          return;
+        }
+        let username = profile.login.trim();
+        if (
+          database
+            .prepare("SELECT 1 FROM users WHERE username = ?")
+            .get(username)
+        )
+          username = `${username}-${String(profile.id).slice(-6)}`;
+        const created = createGithubUser({
+          username,
+          email,
+          githubId: profile.id,
+          githubUsername: profile.login,
+          token: tokenResponse.access_token,
+        });
+        response.setHeader("Set-Cookie", [
+          sessionCookie("github_login_state", "", 0),
+          sessionCookie("session", created.token, SESSION_DURATION),
+        ]);
+        response.writeHead(302, {
+          Location: "/?github=logged_in",
+          "Cache-Control": "no-store",
+        });
+        return response.end();
+      }
       const existing = database
         .prepare(
           "SELECT user_id FROM user_services WHERE service_name = 'github' AND json_extract(credentials_json, '$.github_id') = ? AND user_id <> ?",
@@ -737,7 +881,11 @@ const server = http.createServer(async (request, response) => {
       response.writeHead(204);
       return response.end();
     }
-    if (request.method === "GET" && serveStatic(request, response, url.pathname)) return;
+    if (
+      request.method === "GET" &&
+      serveStatic(request, response, url.pathname)
+    )
+      return;
     return sendJson(response, 404, { error: "Not found" });
   } catch (error) {
     if (error instanceof ProviderError)
