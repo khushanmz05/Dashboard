@@ -2,6 +2,7 @@ const fs = require("node:fs");
 const http = require("node:http");
 const path = require("node:path");
 const crypto = require("node:crypto");
+const zlib = require("node:zlib");
 const database = require("./database");
 const {
   SESSION_DURATION,
@@ -286,7 +287,7 @@ function serialize(row) {
     configuration_json: undefined,
   };
 }
-function serveStatic(response, pathname) {
+function serveStatic(request, response, pathname) {
   const file = pathname === "/" ? "index.html" : pathname.slice(1);
   const resolved = path.resolve(publicDirectory, file);
   if (
@@ -300,10 +301,19 @@ function serveStatic(response, pathname) {
     ".js": "text/javascript; charset=utf-8",
     ".css": "text/css; charset=utf-8",
   };
-  response.writeHead(200, {
-    "Content-Type": types[path.extname(resolved)] || "application/octet-stream",
-  });
-  fs.createReadStream(resolved).pipe(response);
+    const extension = path.extname(resolved);
+    const headers = {
+      "Content-Type": types[extension] || "application/octet-stream",
+      "Cache-Control": extension === ".html" ? "no-cache" : "public, max-age=3600",
+    };
+    const acceptsGzip = /\bgzip\b/.test(request.headers["accept-encoding"] || "");
+    if (acceptsGzip) {
+      response.writeHead(200, { ...headers, "Content-Encoding": "gzip", Vary: "Accept-Encoding" });
+      fs.createReadStream(resolved).pipe(zlib.createGzip()).pipe(response);
+    } else {
+      response.writeHead(200, headers);
+      fs.createReadStream(resolved).pipe(response);
+    }
   return true;
 }
 
@@ -727,7 +737,7 @@ const server = http.createServer(async (request, response) => {
       response.writeHead(204);
       return response.end();
     }
-    if (request.method === "GET" && serveStatic(response, url.pathname)) return;
+    if (request.method === "GET" && serveStatic(request, response, url.pathname)) return;
     return sendJson(response, 404, { error: "Not found" });
   } catch (error) {
     if (error instanceof ProviderError)
