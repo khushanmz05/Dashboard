@@ -23,6 +23,7 @@ const state = {
   sessionVersion: 0,
   view: "overview",
   github: { connected: false, username: null, invalid: false },
+  githubLoginBusy: false,
   serviceBusy: new Set(),
   githubBusy: false,
   sessionCheck: null,
@@ -30,7 +31,12 @@ const state = {
 const label = (name) => titles[name] || name.replaceAll("_", " ");
 const serviceTitle = (name) => serviceInfo[name]?.title || name;
 function notify(text, kind = "success", target) {
-  const selector = target || ({ services: "#services-message", account: "#account-message" }[state.view] || "#dashboard-message");
+  const selector =
+    target ||
+    { services: "#services-message", account: "#account-message" }[
+      state.view
+    ] ||
+    "#dashboard-message";
   const node = $(selector);
   node.textContent = text;
   node.dataset.kind = kind;
@@ -42,9 +48,14 @@ function readableError(error) {
 }
 async function api(path, options = {}) {
   const sessionVersion = state.sessionVersion;
-  try { return await requestJSON(path, options); }
-  catch (error) {
-    if (error.status === 401 && state.user && sessionVersion === state.sessionVersion)
+  try {
+    return await requestJSON(path, options);
+  } catch (error) {
+    if (
+      error.status === 401 &&
+      state.user &&
+      sessionVersion === state.sessionVersion
+    )
       showAuth("Your session has expired. Please sign in again.");
     throw error;
   }
@@ -52,7 +63,12 @@ async function api(path, options = {}) {
 // /data may return 401 for a revoked GitHub token as well as an expired
 // Dashboard session. Check our session once before deciding what to recover.
 async function sessionIsValid() {
-  if (!state.sessionCheck) state.sessionCheck = api("/api/me").then(() => true).finally(() => { state.sessionCheck = null; });
+  if (!state.sessionCheck)
+    state.sessionCheck = api("/api/me")
+      .then(() => true)
+      .finally(() => {
+        state.sessionCheck = null;
+      });
   return state.sessionCheck;
 }
 async function submit(form, target, action) {
@@ -88,6 +104,7 @@ function showAuth(text = "") {
   stopTimers();
   state.enabled = [];
   state.github = { connected: false, username: null, invalid: false };
+  state.githubLoginBusy = false;
   state.serviceBusy.clear();
   state.githubBusy = false;
   state.user = null;
@@ -123,10 +140,18 @@ function setAuthMode(mode) {
 }
 async function reloadServices() {
   const version = state.sessionVersion;
-  const [result, github] = await Promise.all([api("/api/services"), api("/api/github")]);
+  const [result, github] = await Promise.all([
+    api("/api/services"),
+    api("/api/github"),
+  ]);
   if (!state.user || version !== state.sessionVersion) return;
-  state.enabled = result.services.filter((service) => service.enabled).map((service) => service.name);
-  state.github = { ...github, invalid: github.connected && state.github.invalid };
+  state.enabled = result.services
+    .filter((service) => service.enabled)
+    .map((service) => service.name);
+  state.github = {
+    ...github,
+    invalid: github.connected && state.github.invalid,
+  };
   renderServices();
   renderGithubConnection();
 }
@@ -166,7 +191,13 @@ async function startDashboard() {
     year: "numeric",
   }).format(new Date());
   $("#service-count").textContent = state.services.length;
-  for (const id of ["#services-message", "#account-message", "#dashboard-message", "#github-connection-message"]) $(id).textContent = "";
+  for (const id of [
+    "#services-message",
+    "#account-message",
+    "#dashboard-message",
+    "#github-connection-message",
+  ])
+    $(id).textContent = "";
   switchView("overview");
   renderServices();
   renderWidgets();
@@ -176,9 +207,15 @@ function renderGithubConnection() {
   const connection = state.github;
   $("#github-connection-status").textContent = connection.invalid
     ? "Connection needs attention. Reconnect to resume updates."
-    : connection.connected ? `Connected as @${connection.username}` : "Not connected";
+    : connection.connected
+      ? `Connected as @${connection.username}`
+      : "Not connected";
   $("#github-connect").hidden = connection.connected && !connection.invalid;
-  $("#github-connect").textContent = state.githubBusy ? "Connecting…" : connection.invalid ? "Reconnect GitHub" : "Connect GitHub";
+  $("#github-connect").textContent = state.githubBusy
+    ? "Connecting…"
+    : connection.invalid
+      ? "Reconnect GitHub"
+      : "Connect GitHub";
   $("#github-connect").disabled = state.githubBusy;
   $("#github-disconnect").hidden = !connection.connected;
   $("#github-disconnect").disabled = state.githubBusy;
@@ -189,26 +226,68 @@ function handleGithubReturn() {
   if (!result) return;
   url.searchParams.delete("github");
   history.replaceState(null, "", url.pathname + url.search + url.hash);
+  if (result === "logged_in") {
+    switchView("overview");
+    notify("Signed in with GitHub.", "success");
+    return;
+  }
   switchView("services");
   if (result === "connected" && state.github.connected)
-    notify(`GitHub connected as @${state.github.username}. You can now add repository widgets.`, "success", "#services-message");
+    notify(
+      `GitHub connected as @${state.github.username}. You can now add repository widgets.`,
+      "success",
+      "#services-message",
+    );
   else if (result === "denied")
-    notify("GitHub authorization was cancelled. You can try connecting again.", "error", "#services-message");
+    notify(
+      "GitHub authorization was cancelled. You can try connecting again.",
+      "error",
+      "#services-message",
+    );
+  else if (result === "duplicate")
+    notify(
+      "This GitHub account is already connected to another dashboard account. Disconnect it from that account, or sign out of GitHub and connect a different account.",
+      "error",
+      "#services-message",
+    );
   else
-    notify("GitHub connection was not completed. Check your connection and try again.", "error", "#services-message");
+    notify(
+      "GitHub connection was not completed. Check your connection and try again.",
+      "error",
+      "#services-message",
+    );
   $("#services-message").focus();
+}
+function handleGithubLoginReturn() {
+  const url = new URL(location.href);
+  const result = url.searchParams.get("github");
+  if (!["login_denied", "login_error"].includes(result)) return;
+  const message = url.searchParams.get("message");
+  url.searchParams.delete("github");
+  url.searchParams.delete("message");
+  history.replaceState(null, "", url.pathname + url.search + url.hash);
+  setAuthMode("login");
+  $("#auth-message").textContent =
+    result === "login_denied"
+      ? "GitHub authorization was cancelled. You can try again."
+      : message || "GitHub login could not be completed. Please try again.";
+  $("#auth-message").dataset.kind = "error";
 }
 async function connectGithub() {
   if (state.githubBusy) return;
   state.githubBusy = true;
   const version = state.sessionVersion;
-  renderServices(); renderGithubConnection();
+  renderServices();
+  renderGithubConnection();
   notify("", "success", "#github-connection-message");
   try {
     const result = await api("/auth/github/connect");
     if (version !== state.sessionVersion || !state.user) return;
     const destination = new URL(result.url);
-    if (destination.origin !== "https://github.com" || destination.pathname !== "/login/oauth/authorize")
+    if (
+      destination.origin !== "https://github.com" ||
+      destination.pathname !== "/login/oauth/authorize"
+    )
       throw new Error("The server returned an invalid authorization link.");
     location.assign(destination.href);
   } catch (error) {
@@ -218,7 +297,33 @@ async function connectGithub() {
     }
   } finally {
     state.githubBusy = false;
-    if (state.user) { renderServices(); renderGithubConnection(); }
+    if (state.user) {
+      renderServices();
+      renderGithubConnection();
+    }
+  }
+}
+async function loginWithGithub() {
+  if (state.githubLoginBusy) return;
+  state.githubLoginBusy = true;
+  const button = $("#github-login");
+  button.disabled = true;
+  button.textContent = "Connecting…";
+  try {
+    const result = await requestJSON("/auth/github/login");
+    const destination = new URL(result.url);
+    if (
+      destination.origin !== "https://github.com" ||
+      destination.pathname !== "/login/oauth/authorize"
+    )
+      throw new Error("The server returned an invalid authorization link.");
+    location.assign(destination.href);
+  } catch (error) {
+    $("#auth-message").textContent = readableError(error);
+    $("#auth-message").dataset.kind = "error";
+    button.disabled = false;
+    button.textContent = "Continue with GitHub";
+    state.githubLoginBusy = false;
   }
 }
 function switchView(view) {
@@ -234,14 +339,28 @@ function switchView(view) {
   $("#breadcrumb").textContent = view[0].toUpperCase() + view.slice(1);
 }
 function renderServices() {
-  $("#services-grid").innerHTML = state.services.map((service) => {
-    const info = serviceInfo[service.name] || { icon: "◈", description: "Add widgets from this service." };
-    const enabled = state.enabled.includes(service.name);
-    const needsConnection = service.name === "github" && (!state.github.connected || state.github.invalid);
-    const busy = state.serviceBusy.has(service.name) || (service.name === "github" && state.githubBusy);
-    const used = state.widgets.filter((item) => item.service_name === service.name).length;
-    const status = enabled ? needsConnection ? "Connection required" : "Enabled" : "Available";
-    return `<article class="service-card" data-service-card="${esc(service.name)}" aria-busy="${busy}">
+  $("#services-grid").innerHTML = state.services
+    .map((service) => {
+      const info = serviceInfo[service.name] || {
+        icon: "◈",
+        description: "Add widgets from this service.",
+      };
+      const enabled = state.enabled.includes(service.name);
+      const needsConnection =
+        service.name === "github" &&
+        (!state.github.connected || state.github.invalid);
+      const busy =
+        state.serviceBusy.has(service.name) ||
+        (service.name === "github" && state.githubBusy);
+      const used = state.widgets.filter(
+        (item) => item.service_name === service.name,
+      ).length;
+      const status = enabled
+        ? needsConnection
+          ? "Connection required"
+          : "Enabled"
+        : "Available";
+      return `<article class="service-card" data-service-card="${esc(service.name)}" aria-busy="${busy}">
       <span class="service-icon ${esc(service.name)}" aria-hidden="true">${info.icon}</span>
       <span class="badge ${!enabled || needsConnection ? "inactive" : ""}">${status}</span>
       <h2>${esc(serviceTitle(service.name))}</h2><p class="muted">${esc(info.description)}</p>
@@ -250,7 +369,8 @@ function renderServices() {
       ${enabled && needsConnection ? `<button class="text-button" data-github-connect ${busy ? "disabled" : ""}>${state.github.invalid ? "Reconnect GitHub" : "Connect GitHub"} ↗</button>` : enabled ? `<button class="text-button" data-add="${esc(service.name)}" ${busy ? "disabled" : ""}>Add a widget ↗</button>` : ""}
       ${enabled && used && service.name !== "weather" ? `<p class="field-help service-help">${used} widget${used === 1 ? "" : "s"} use this service. Remove them before disabling it.</p>` : ""}
     </article>`;
-  }).join("");
+    })
+    .join("");
   $("#enabled-count").textContent = state.enabled.length;
 }
 function renderParameters(values = {}) {
@@ -268,19 +388,17 @@ function renderParameters(values = {}) {
     number: "5",
   };
   $("#configuration").innerHTML = (widget?.params || [])
-    .map(
-      (param) => {
-        const inputId = `widget-param-${param.name}`;
-        const title =
-          {
-            link: "Feed URL",
-            number: "Number of items",
-            repository: "Repository (owner/name)",
-            city: "City",
-          }[param.name] || label(param.name);
-        return `<label for="${esc(inputId)}" class="form-field">${esc(title)}<input id="${esc(inputId)}" data-param="${esc(param.name)}" type="${param.type === "integer" ? "number" : param.name === "link" ? "url" : "text"}" ${param.type === "integer" ? 'step="1" min="1" max="20"' : 'maxlength="2048"'} placeholder="${esc(hints[param.name] || "")}" value="${esc(values[param.name] ?? (param.type === "integer" ? 5 : ""))}" required></label>`;
-      },
-    )
+    .map((param) => {
+      const inputId = `widget-param-${param.name}`;
+      const title =
+        {
+          link: "Feed URL",
+          number: "Number of items",
+          repository: "Repository (owner/name)",
+          city: "City",
+        }[param.name] || label(param.name);
+      return `<label for="${esc(inputId)}" class="form-field">${esc(title)}<input id="${esc(inputId)}" data-param="${esc(param.name)}" type="${param.type === "integer" ? "number" : param.name === "link" ? "url" : "text"}" ${param.type === "integer" ? 'step="1" min="1" max="20"' : 'maxlength="2048"'} placeholder="${esc(hints[param.name] || "")}" value="${esc(values[param.name] ?? (param.type === "integer" ? 5 : ""))}" required></label>`;
+    })
     .join("");
   if (service?.name === "rss")
     $("#configuration").insertAdjacentHTML(
@@ -307,9 +425,19 @@ function populateWidgetChoices(selected) {
   renderParameters();
 }
 function openEditor(item, serviceName) {
-  if (serviceName && (!state.enabled.includes(serviceName) || (serviceName === "github" && (!state.github.connected || state.github.invalid)))) {
+  if (
+    serviceName &&
+    (!state.enabled.includes(serviceName) ||
+      (serviceName === "github" &&
+        (!state.github.connected || state.github.invalid)))
+  ) {
     switchView("services");
-    notify(serviceName === "github" ? "Enable and connect GitHub before adding a repository widget." : "Enable this service before adding a widget.", "error");
+    notify(
+      serviceName === "github"
+        ? "Enable and connect GitHub before adding a repository widget."
+        : "Enable this service before adding a widget.",
+      "error",
+    );
     return;
   }
   state.editingId = item?.id || null;
@@ -318,7 +446,13 @@ function openEditor(item, serviceName) {
   $("#dialog-title").textContent = item ? "Edit widget" : "Add a widget";
   $("#save-widget").textContent = item ? "Save changes" : "Add widget";
   $("#service").innerHTML = state.services
-    .filter((service) => state.enabled.includes(service.name) && (service.name !== "github" || (state.github.connected && !state.github.invalid) || item?.service_name === "github"))
+    .filter(
+      (service) =>
+        state.enabled.includes(service.name) &&
+        (service.name !== "github" ||
+          (state.github.connected && !state.github.invalid) ||
+          item?.service_name === "github"),
+    )
     .map(
       (service) =>
         `<option value="${esc(service.name)}">${esc(serviceTitle(service.name))}</option>`,
@@ -379,7 +513,12 @@ function renderWidgets() {
   for (const item of state.widgets) {
     const runtime = runtimeFor(item);
     paintWidget(item, runtime);
-    if (!runtime.updated && !runtime.busy && !runtime.timer && !runtime.reconnect)
+    if (
+      !runtime.updated &&
+      !runtime.busy &&
+      !runtime.timer &&
+      !runtime.reconnect
+    )
       refreshWidget(item);
   }
 }
@@ -399,7 +538,13 @@ function paintWidget(item, runtime) {
     : runtime.error
       ? `<div class="widget-error" role="status">${esc(runtime.error)}</div>`
       : '<p class="loading">Loading your data…</p>';
-  if (runtime.reconnect) card.querySelector(".widget-body").insertAdjacentHTML("beforeend", '<button class="text-button" data-github-connect>Connect or reconnect GitHub ↗</button>');
+  if (runtime.reconnect)
+    card
+      .querySelector(".widget-body")
+      .insertAdjacentHTML(
+        "beforeend",
+        '<button class="text-button" data-github-connect>Connect or reconnect GitHub ↗</button>',
+      );
   card.querySelector(".timestamp").textContent =
     `${runtime.busy ? "Updating…" : runtime.updated ? `Updated ${runtime.updated.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}` : runtime.error ? "Update failed" : "Waiting"} · ${item.refresh_rate}s`;
   card.querySelector('[data-action="refresh"]').disabled = runtime.busy;
@@ -424,14 +569,19 @@ async function refreshWidget(item) {
   } catch (error) {
     if (epoch !== state.epoch) return;
     if (error.status === 401) {
-      try { await sessionIsValid(); }
-      catch { if (!state.user || epoch !== state.epoch) return; }
+      try {
+        await sessionIsValid();
+      } catch {
+        if (!state.user || epoch !== state.epoch) return;
+      }
       if (!state.user || epoch !== state.epoch) return;
     }
-    runtime.reconnect = item.service_name === "github" && [401, 403].includes(error.status);
+    runtime.reconnect =
+      item.service_name === "github" && [401, 403].includes(error.status);
     if (runtime.reconnect) {
       state.github.invalid = true;
-      renderGithubConnection(); renderServices();
+      renderGithubConnection();
+      renderServices();
     }
     runtime.error = readableError(error);
   } finally {
@@ -443,7 +593,9 @@ async function refreshWidget(item) {
       state.user
     ) {
       paintWidget(item, runtime);
-      runtime.timer = runtime.reconnect ? null : setTimeout(() => refreshWidget(item), item.refresh_rate * 1000);
+      runtime.timer = runtime.reconnect
+        ? null
+        : setTimeout(() => refreshWidget(item), item.refresh_rate * 1000);
     }
   }
 }
@@ -483,7 +635,10 @@ async function moveWidget(id, targetIndex) {
     );
     moved?.querySelector('[data-action="edit"]').focus();
   } catch (error) {
-    notify(`Could not finish saving the order: ${readableError(error)}`, "error");
+    notify(
+      `Could not finish saving the order: ${readableError(error)}`,
+      "error",
+    );
     if (state.user) await reloadWidgets().catch(() => {});
   } finally {
     state.moving = false;
@@ -493,7 +648,8 @@ $("#show-login").addEventListener("click", () => setAuthMode("login"));
 $("#show-register").addEventListener("click", () => setAuthMode("register"));
 $("#show-verify").addEventListener("click", () => {
   setAuthMode("verify");
-  $("#verification-notice").textContent = "Enter your confirmation code to activate your account. Codes expire after 24 hours and can only be used once.";
+  $("#verification-notice").textContent =
+    "Enter your confirmation code to activate your account. Codes expire after 24 hours and can only be used once.";
   $("#verify-form input").focus();
 });
 $("#login-form").addEventListener("submit", (event) => {
@@ -506,6 +662,7 @@ $("#login-form").addEventListener("submit", (event) => {
     await startDashboard();
   });
 });
+$("#github-login").addEventListener("click", loginWithGithub);
 $("#register-form").addEventListener("submit", (event) => {
   event.preventDefault();
   submit(event.currentTarget, "#auth-message", async () => {
@@ -527,7 +684,9 @@ $("#verify-form").addEventListener("submit", (event) => {
   submit(event.currentTarget, "#auth-message", async () => {
     await api("/auth/verify", {
       method: "POST",
-      body: JSON.stringify({ token: new FormData(event.target).get("token").trim() }),
+      body: JSON.stringify({
+        token: new FormData(event.target).get("token").trim(),
+      }),
     });
     setAuthMode("login");
     $("#auth-message").textContent = "Account confirmed. You can now sign in.";
@@ -560,7 +719,10 @@ accountMenu.addEventListener("keydown", (event) => {
     closeAccountMenu(true);
   } else if (event.key === "ArrowDown" || event.key === "ArrowUp") {
     event.preventDefault();
-    items[(index + (event.key === "ArrowDown" ? 1 : -1) + items.length) % items.length].focus();
+    items[
+      (index + (event.key === "ArrowDown" ? 1 : -1) + items.length) %
+        items.length
+    ].focus();
   }
 });
 async function logout() {
@@ -582,7 +744,11 @@ $("#disconnect-form").addEventListener("submit", (event) => {
     $("#disconnect-dialog").close();
     await reloadServices();
     await reloadWidgets();
-    notify("GitHub disconnected. Reconnect it to resume widget updates.", "success", "#services-message");
+    notify(
+      "GitHub disconnected. Reconnect it to resume widget updates.",
+      "success",
+      "#services-message",
+    );
   });
 });
 $("#service").addEventListener("change", () => populateWidgetChoices());
@@ -601,10 +767,20 @@ $("#widget-form").addEventListener("submit", (event) => {
     if (configuration.repository) {
       if (/^https?:\/\//i.test(configuration.repository)) {
         let repositoryUrl;
-        try { repositoryUrl = new URL(configuration.repository); } catch { throw new Error("Enter owner/repository or a GitHub repository URL."); }
-        if (repositoryUrl.hostname !== "github.com" || repositoryUrl.username || repositoryUrl.password)
+        try {
+          repositoryUrl = new URL(configuration.repository);
+        } catch {
+          throw new Error("Enter owner/repository or a GitHub repository URL.");
+        }
+        if (
+          repositoryUrl.hostname !== "github.com" ||
+          repositoryUrl.username ||
+          repositoryUrl.password
+        )
           throw new Error("Use a repository URL from github.com.");
-        configuration.repository = repositoryUrl.pathname.replace(/^\/|\/$/g, "").replace(/\.git$/, "");
+        configuration.repository = repositoryUrl.pathname
+          .replace(/^\/|\/$/g, "")
+          .replace(/\.git$/, "");
       }
       if (!/^[\w.-]+\/[\w.-]+$/.test(configuration.repository))
         throw new Error("Use owner/repository, for example owner/project.");
@@ -650,8 +826,14 @@ document.addEventListener("click", async (event) => {
     closeAccountMenu();
   const button = event.target.closest("button");
   if (!button || button.disabled) return;
-  if (button.hasAttribute("data-logout")) { await logout(); return; }
-  if (button.hasAttribute("data-github-connect")) { await connectGithub(); return; }
+  if (button.hasAttribute("data-logout")) {
+    await logout();
+    return;
+  }
+  if (button.hasAttribute("data-github-connect")) {
+    await connectGithub();
+    return;
+  }
   if (button.hasAttribute("data-github-disconnect")) {
     closeAccountMenu();
     $("#disconnect-message").textContent = "";
@@ -685,17 +867,29 @@ document.addEventListener("click", async (event) => {
     const name = button.dataset.enable;
     if (state.serviceBusy.has(name)) return;
     const version = state.sessionVersion;
-    state.serviceBusy.add(name); renderServices();
+    state.serviceBusy.add(name);
+    renderServices();
     notify("", "success", "#services-message");
     try {
-      if (state.enabled.includes(name)) await api(`/api/services/${encodeURIComponent(name)}`, { method: "DELETE" });
-      else await api(`/api/services/${encodeURIComponent(name)}/enable`, { method: "POST" });
+      if (state.enabled.includes(name))
+        await api(`/api/services/${encodeURIComponent(name)}`, {
+          method: "DELETE",
+        });
+      else
+        await api(`/api/services/${encodeURIComponent(name)}/enable`, {
+          method: "POST",
+        });
       if (!state.user || version !== state.sessionVersion) return;
       await reloadServices();
       if (!state.user || version !== state.sessionVersion) return;
-      notify(`${serviceTitle(name)} ${state.enabled.includes(name) ? "enabled" : "disabled"}.`, "success", "#services-message");
+      notify(
+        `${serviceTitle(name)} ${state.enabled.includes(name) ? "enabled" : "disabled"}.`,
+        "success",
+        "#services-message",
+      );
     } catch (error) {
-      if (state.user && version === state.sessionVersion) notify(readableError(error), "error", "#services-message");
+      if (state.user && version === state.sessionVersion)
+        notify(readableError(error), "error", "#services-message");
     } finally {
       state.serviceBusy.delete(name);
       if (state.user && version === state.sessionVersion) renderServices();
@@ -764,12 +958,24 @@ const entryUrl = new URL(location.href);
 const verificationToken = entryUrl.searchParams.get("verify_token");
 if (verificationToken !== null) {
   entryUrl.searchParams.delete("verify_token");
-  history.replaceState(null, "", entryUrl.pathname + entryUrl.search + entryUrl.hash);
+  history.replaceState(
+    null,
+    "",
+    entryUrl.pathname + entryUrl.search + entryUrl.hash,
+  );
   showAuth();
   setAuthMode("verify");
-  $("#verification-notice").textContent = "Confirm the code from your link to activate your account.";
+  $("#verification-notice").textContent =
+    "Confirm the code from your link to activate your account.";
   $("#verify-form input").value = verificationToken;
   $("#verify-form input").focus();
 } else {
-  startDashboard().catch((error) => showAuth(error.status === 401 ? "" : `Unable to open your workspace. ${readableError(error)}`));
+  startDashboard().catch((error) => {
+    showAuth(
+      error.status === 401
+        ? ""
+        : `Unable to open your workspace. ${readableError(error)}`,
+    );
+    handleGithubLoginReturn();
+  });
 }

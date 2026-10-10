@@ -74,6 +74,9 @@
               Sign in <span aria-hidden="true">↗</span>
             </button>
           </form>
+          <button type="button" id="github-login" class="secondary full">
+            Continue with GitHub
+          </button>
           <form id="register-form" hidden>
             <label
               >Username<input
@@ -175,10 +178,21 @@
             >
               ⋮
             </button>
-            <div id="account-menu" class="account-menu-panel" role="menu" hidden>
-              <button type="button" role="menuitem" data-account-view="account">Account</button>
-              <button type="button" role="menuitem" data-github-disconnect>Disconnect GitHub</button>
-              <button type="button" role="menuitem" data-logout>Sign out</button>
+            <div
+              id="account-menu"
+              class="account-menu-panel"
+              role="menu"
+              hidden
+            >
+              <button type="button" role="menuitem" data-account-view="account">
+                Account
+              </button>
+              <button type="button" role="menuitem" data-github-disconnect>
+                Disconnect GitHub
+              </button>
+              <button type="button" role="menuitem" data-logout>
+                Sign out
+              </button>
             </div>
           </div>
         </div>
@@ -269,15 +283,30 @@
               </p>
             </div>
           </div>
-          <p id="services-message" class="form-message" role="status" tabindex="-1"></p>
+          <p
+            id="services-message"
+            class="form-message"
+            role="status"
+            tabindex="-1"
+          ></p>
           <div id="services-grid" class="services-grid"></div>
           <div id="github-panel" class="account-card github-panel">
             <span class="badge">Connected account</span>
             <h2>GitHub</h2>
-            <p class="muted">Connect your GitHub account to load repository widgets. The current connection grants access to public repositories.</p>
+            <p class="muted">
+              Connect your GitHub account to load repository widgets. The
+              current connection grants access to public repositories.
+            </p>
             <p id="github-connection-status" class="muted">Not connected</p>
-            <button id="github-connect" data-github-connect class="primary">Connect GitHub</button>
-            <button id="github-disconnect" data-github-disconnect class="text-button" hidden>
+            <button id="github-connect" data-github-connect class="primary">
+              Connect GitHub
+            </button>
+            <button
+              id="github-disconnect"
+              data-github-disconnect
+              class="text-button"
+              hidden
+            >
               Disconnect GitHub
             </button>
             <p
@@ -286,7 +315,10 @@
               role="status"
             ></p>
           </div>
-          <p class="integration-note">Service choices are saved to your account and shared across browsers. Remove a service's widgets before disabling it.</p>
+          <p class="integration-note">
+            Service choices are saved to your account and shared across
+            browsers. Remove a service's widgets before disabling it.
+          </p>
         </section>
         <section id="account-page" hidden>
           <div class="page-heading">
@@ -310,7 +342,9 @@
               Your widget configurations and order are saved to your account.
             </p>
           </div>
-          <button class="secondary" data-view="services">Manage connected services</button>
+          <button class="secondary" data-view="services">
+            Manage connected services
+          </button>
         </section>
       </main>
     </div>
@@ -334,8 +368,12 @@
         <fieldset class="form-section">
           <legend>Widget source</legend>
           <div class="form-grid">
-            <label for="service">Service<select id="service" required></select></label>
-            <label for="widget">Widget<select id="widget" required></select></label>
+            <label for="service"
+              >Service<select id="service" required></select
+            ></label>
+            <label for="widget"
+              >Widget<select id="widget" required></select
+            ></label>
           </div>
         </fieldset>
         <fieldset class="form-section">
@@ -347,14 +385,18 @@
           <legend>Refresh schedule</legend>
           <label for="refresh-rate"
             >Refresh every<select id="refresh-rate">
-            <option value="10">10 seconds</option>
-            <option value="30">30 seconds</option>
-            <option value="60">1 minute</option>
-            <option value="300" selected>5 minutes</option>
-            <option value="900">15 minutes</option>
-            <option value="3600">1 hour</option>
-          </select></label>
-          <p class="field-help">Short intervals can reach service rate limits. Five minutes is a good start.</p>
+              <option value="10">10 seconds</option>
+              <option value="30">30 seconds</option>
+              <option value="60">1 minute</option>
+              <option value="300" selected>5 minutes</option>
+              <option value="900">15 minutes</option>
+              <option value="3600">1 hour</option>
+            </select></label
+          >
+          <p class="field-help">
+            Short intervals can reach service rate limits. Five minutes is a
+            good start.
+          </p>
         </fieldset>
         <p id="widget-message" class="form-message" role="alert"></p>
         <div class="dialog-actions">
@@ -390,10 +432,31 @@
     </dialog>
     <dialog id="disconnect-dialog" aria-labelledby="disconnect-title">
       <form id="disconnect-form">
-        <div class="dialog-header"><h2 id="disconnect-title">Disconnect GitHub?</h2><button type="button" class="icon-button" data-close="disconnect-dialog" aria-label="Close confirmation">×</button></div>
-        <p class="muted">Your GitHub widgets will stay on the dashboard, but they will stop updating until you reconnect. Your service subscription stays enabled.</p>
+        <div class="dialog-header">
+          <h2 id="disconnect-title">Disconnect GitHub?</h2>
+          <button
+            type="button"
+            class="icon-button"
+            data-close="disconnect-dialog"
+            aria-label="Close confirmation"
+          >
+            ×
+          </button>
+        </div>
+        <p class="muted">
+          Your GitHub widgets will stay on the dashboard, but they will stop
+          updating until you reconnect. Your service subscription stays enabled.
+        </p>
         <p id="disconnect-message" class="form-message" role="alert"></p>
-        <div class="dialog-actions"><button type="button" class="secondary" data-close="disconnect-dialog">Keep connected</button><button class="danger">Disconnect</button></div>
+        <div class="dialog-actions">
+          <button
+            type="button"
+            class="secondary"
+            data-close="disconnect-dialog"
+          >
+            Keep connected</button
+          ><button class="danger">Disconnect</button>
+        </div>
       </form>
     </dialog>
     <script type="module" src="/app.js"></script>
