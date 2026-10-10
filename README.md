@@ -84,36 +84,60 @@ session. Disabling a service requires removing its widgets first.
 
 ### Docker
 
-For a new machine, Docker is the only project prerequisite. The Compose build
-installs backend dependencies inside the backend image and serves the static
-frontend from a separate Nginx image.
+Install and start Docker with the current Compose plugin (Docker Desktop with
+Ubuntu WSL integration, or Docker Engine with Compose inside Ubuntu).
+From the repository root, build and start the entire application:
 
-Create the environment file from the template and add the GitHub OAuth values:
+```bash
+docker compose up
+```
+
+Both services use `pull_policy: build`, so this command builds their images,
+including after source changes. Unchanged build layers are cached. The explicit
+`docker compose up --build` command works too. No local Node.js, npm install,
+database setup or `.env` file is required. The first build needs internet access
+to download base images, build tools and application dependencies.
+
+Open [http://localhost:8080](http://localhost:8080). Compose installs backend
+dependencies (including native SQLite support), initializes the database, waits
+for the backend health check, then starts Nginx with the frontend. Port **8080**
+must be available. The frontend proxies API, authentication, health and catalogue
+requests to the internal backend. SQLite persists in the named `dashboard-data`
+volume across container recreation. Services restart unless explicitly stopped.
+
+To start in the background and wait for both services to become healthy:
+
+```bash
+docker compose up -d --wait
+```
+
+GitHub login and widgets additionally require your OAuth application credentials.
+For those features, copy the template, fill in the GitHub values, then run
+`docker compose up -d --wait` again:
 
 ```bash
 cp .env.example .env
 ```
 
-Then start both services:
+Username/password registration, weather and RSS work without GitHub credentials.
+Compose automatically reads `.env`; it is never copied into an image.
+
+Check service state or follow logs:
 
 ```bash
-docker compose up --build
+docker compose ps
+docker compose logs -f
 ```
 
-Open [http://localhost:8080](http://localhost:8080). The `frontend` service
-exposes port **8080** and proxies API, authentication, health and catalogue
-requests to the internal `backend` service. The backend is not exposed directly
-to the host. SQLite persists in the named `dashboard-data` Docker volume.
-
-Stop the stack with:
+Stop the stack while preserving stored accounts and dashboards:
 
 ```bash
 docker compose down
 ```
 
 Use `docker compose down -v` only when you intentionally want to delete the
-database volume and all Docker-managed dashboard data. Do not copy `.env` into
-an image or commit it; `.env.example` contains placeholders only.
+database volume and all Docker-managed dashboard data. Do not commit `.env`;
+`.env.example` contains placeholders only.
 
 ### Check the server
 
@@ -294,7 +318,7 @@ See [the verification notes](docs/frontend.md) for scope and limitations.
 | Server subscriptions, widget data and GitHub OAuth | Present in the supplied backend and integrated into the UI                                |
 | Account confirmation                               | Code entry and `/?verify_token=...` links work; email delivery and resend API are missing |
 | Live provider / OAuth credentials                  | Must be checked with the team's environment before the demo                               |
-| Docker startup                                     | Two-service Compose stack built and run; frontend/backend health checks passed            |
+| Docker startup                                     | Automatic Compose build/start configured; current images require verification on a Docker host |
 | Lighthouse                                         | Desktop and mobile performance/accessibility scores reached 100/100                       |
 | Accessibility                                      | Lighthouse checks passed; a full assistive-technology audit remains separate              |
 

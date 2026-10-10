@@ -3,12 +3,15 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile
+    pull_policy: build
+    restart: unless-stopped
+    init: true
     expose:
       - "8080"
     environment:
       PORT: 8080
-      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID}
-      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET}
+      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
+      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
       GITHUB_CALLBACK_URL: ${GITHUB_CALLBACK_URL:-http://localhost:8080/auth/github/callback}
     volumes:
       - dashboard-data:/app/data
@@ -18,26 +21,34 @@ services:
           "CMD",
           "node",
           "-e",
-          "fetch('http://localhost:8080/health').then(response => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))",
+          "fetch('http://127.0.0.1:8080/health', { signal: AbortSignal.timeout(3000) }).then(response => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))",
         ]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 10s
 
   frontend:
     build:
       context: .
       dockerfile: docker/Dockerfile.frontend
+    pull_policy: build
+    restart: unless-stopped
     ports:
       - "8080:80"
     depends_on:
       backend:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/health"]
+      test:
+        [
+          "CMD-SHELL",
+          "wget -q -T 3 -O /dev/null http://127.0.0.1/ && wget -q -T 3 -O /dev/null http://127.0.0.1/health",
+        ]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 10s
 
 volumes:
   dashboard-data:
