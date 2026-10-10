@@ -12,6 +12,7 @@ Built for the **Epitech G-WEB-500 Dashboard project**, by a team of two.
 ## Features
 
 - Registration, explicit account confirmation, sign-in and sign-out.
+- Password login and GitHub OAuth login with account linking safeguards.
 - Server-persisted service subscriptions and per-user dashboards.
 - GitHub account connection, cancellation, disconnection and reconnection.
 - Nine widget types across three services, with independent configurations.
@@ -39,9 +40,10 @@ GitHub needs the OAuth configuration below.
 2. Click **Confirm account**. The current development server returns a code that
    the form fills in. **No confirmation email is sent.**
 3. Sign in with your username and password.
-4. Open **Services**. Weather is available by default; enable RSS or GitHub.
-5. For GitHub, select **Connect GitHub** and authorize the account.
-6. Add a widget, enter its parameters and choose a refresh interval.
+4. Alternatively, choose **Continue with GitHub** on the login screen.
+5. Open **Services**. Weather is available by default; enable RSS or GitHub.
+6. For GitHub widgets, select **Connect GitHub** and authorize the account.
+7. Add a widget, enter its parameters and choose a refresh interval.
 
 The default interval is **5 minutes**, with a minimum of **10 seconds**.
 Short intervals can exhaust provider rate limits. You can add several instances
@@ -192,6 +194,7 @@ and `weather.js` exercises are separate from the app started by `npm start`.
 | POST           | `/auth/register`             | Create an unconfirmed account                |
 | POST           | `/auth/verify`               | Confirm a registration code                  |
 | POST           | `/auth/login`                | Start a session                              |
+| GET            | `/auth/github/login`         | Start a GitHub login flow                    |
 | POST           | `/auth/logout`               | End a session                                |
 | GET            | `/api/me`                    | Current user                                 |
 | GET            | `/api/services`              | Current subscriptions                        |
@@ -258,8 +261,9 @@ See [the verification notes](docs/frontend.md) for scope and limitations.
 | Server subscriptions, widget data and GitHub OAuth | Present in the supplied backend and integrated into the UI                                |
 | Account confirmation                               | Code entry and `/?verify_token=...` links work; email delivery and resend API are missing |
 | Live provider / OAuth credentials                  | Must be checked with the team's environment before the demo                               |
-| Docker startup                                     | Configuration supplied; not executed in this verification environment                     |
-| Accessibility                                      | Keyboard and responsive checks passed; no full assistive-technology audit                 |
+| Docker startup                                     | Two-service Compose stack built and run; frontend/backend health checks passed            |
+| Lighthouse                                         | Desktop and mobile performance/accessibility scores reached 100/100                       |
+| Accessibility                                      | Lighthouse checks passed; a full assistive-technology audit remains separate              |
 
 The catalogue has **3 services and 9 widget types**; the two-person assignment
 requires at least 3 services and 6 widgets. Counts alone do not establish full
