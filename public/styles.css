@@ -539,7 +539,7 @@ input::placeholder {
 .widget-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 20px;
+  gap: 16px;
   align-items: start;
 }
 .widget {
@@ -567,8 +567,12 @@ input::placeholder {
   flex-shrink: 0;
 }
 .service-icon.github {
-  background: #eeeafa;
-  color: #8674a9;
+  background-color: #24292f;
+  background-image: url("/github-mark.svg");
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: 20px;
+  color: transparent;
 }
 .service-icon.rss {
   background: #fcf0e4;
@@ -591,7 +595,7 @@ input::placeholder {
 }
 .widget-context {
   padding: 0 19px;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--muted);
   white-space: nowrap;
   overflow: hidden;
@@ -621,7 +625,7 @@ input::placeholder {
   letter-spacing: -1px;
 }
 .metric-caption {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--muted);
   line-height: 1.6;
 }
@@ -638,7 +642,7 @@ input::placeholder {
 .widget-links li {
   padding: 10px 0;
   border-bottom: 1px solid #eef0e9;
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.5;
 }
 .widget-links li:last-child {
@@ -702,7 +706,7 @@ input::placeholder {
 }
 .empty-state {
   grid-column: 1/-1;
-  min-height: 310px;
+  min-height: 240px;
   border: 1px dashed #cbd5bf;
   border-radius: 14px;
   display: flex;
@@ -765,7 +769,7 @@ input::placeholder {
 }
 .service-card ul {
   padding-left: 17px;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--muted);
   line-height: 2.4;
   margin-bottom: 25px;
@@ -1076,18 +1080,53 @@ dialog::backdrop {
 }
 
 /* Connected services and accessible feedback. */
-.form-message[data-kind="success"] { color: #365c45; }
-.form-message[data-kind="error"] { color: #a83232; }
-.github-panel { max-width: none; margin-top: 24px; }
-.github-panel h2 { margin-top: 16px; }
-.github-panel .muted { margin-top: 0; max-width: 650px; }
-.service-card .service-help { min-height: 0; margin: 14px 0 0; font-size: 11px; }
-.service-card[aria-busy="true"] { opacity: .75; }
-#account-page > .secondary { margin-top: 20px; }
-#services-message:not(:empty) { padding: 12px 15px; border: 1px solid currentColor; border-radius: 9px; margin-bottom: 20px; }
-#github-connection-status { font-weight: 600; }
-#github-disconnect { margin-left: 12px; }
+.form-message[data-kind="success"] {
+  color: #365c45;
+}
+.form-message[data-kind="error"] {
+  color: #a83232;
+}
+.github-panel {
+  max-width: none;
+  margin-top: 24px;
+}
+.github-panel h2 {
+  margin-top: 16px;
+}
+.github-panel .muted {
+  margin-top: 0;
+  max-width: 650px;
+}
+.service-card .service-help {
+  min-height: 0;
+  margin: 14px 0 0;
+  font-size: 11px;
+}
+.service-card[aria-busy="true"] {
+  opacity: 0.75;
+}
+#account-page > .secondary {
+  margin-top: 20px;
+}
+#services-message:not(:empty) {
+  padding: 12px 15px;
+  border: 1px solid currentColor;
+  border-radius: 9px;
+  margin-bottom: 20px;
+}
+#github-connection-status {
+  font-weight: 600;
+}
+#github-disconnect {
+  margin-left: 12px;
+}
 @media (max-width: 500px) {
-  .widget-footer button { min-width: 32px; min-height: 36px; }
-  .widget-footer .timestamp { flex-basis: 100%; padding-bottom: 4px; }
+  .widget-footer button {
+    min-width: 32px;
+    min-height: 36px;
+  }
+  .widget-footer .timestamp {
+    flex-basis: 100%;
+    padding-bottom: 4px;
+  }
 }
