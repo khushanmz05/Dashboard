@@ -2,3 +2,11 @@ node_modules
 .git
 .env
 npm-debug.log
+data
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+cookies.txt
+auth/users.json
+tests
+docs
