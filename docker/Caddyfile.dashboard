@@ -1,0 +1,4 @@
+gayboyz.lol {
+    encode zstd gzip
+    reverse_proxy dashboard-web:80
+}

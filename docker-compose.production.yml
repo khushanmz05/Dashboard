@@ -1,0 +1,20 @@
+# Use together with docker-compose.yml behind the existing Caddy proxy.
+services:
+  backend:
+    environment:
+      COOKIE_SECURE: "true"
+      GITHUB_CALLBACK_URL: https://${PUBLIC_DOMAIN:?Set PUBLIC_DOMAIN in .env}/auth/github/callback
+
+  frontend:
+    # Only Caddy publishes ports; this app remains inside Docker networks.
+    ports: !reset []
+    networks:
+      default:
+      edge:
+        aliases:
+          - dashboard-web
+
+networks:
+  edge:
+    external: true
+    name: ${EDGE_NETWORK:-la-rose_edge}

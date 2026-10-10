@@ -156,7 +156,8 @@ function requireUser(request) {
   return user;
 }
 function sessionCookie(name, value, maxAge) {
-  return `${name}=${encodeURIComponent(value)}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${maxAge}`;
+  const secure = process.env.COOKIE_SECURE === "true" ? "; Secure" : "";
+  return `${name}=${encodeURIComponent(value)}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${maxAge}${secure}`;
 }
 async function githubJson(url, options = {}) {
   let response;
@@ -385,7 +386,7 @@ const server = http.createServer(async (request, response) => {
           },
         },
         {
-          "Set-Cookie": `session=${result.token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${SESSION_DURATION}`,
+          "Set-Cookie": sessionCookie("session", result.token, SESSION_DURATION),
         },
       );
     }
@@ -395,7 +396,7 @@ const server = http.createServer(async (request, response) => {
         response,
         200,
         { message: "Signed out" },
-        { "Set-Cookie": "session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0" },
+        { "Set-Cookie": sessionCookie("session", "", 0) },
       );
     }
     if (request.method === "GET" && url.pathname === "/api/me")
