@@ -527,14 +527,42 @@ $("#verify-form").addEventListener("submit", (event) => {
     $("#login-form input").focus();
   });
 });
-$("#logout-button").addEventListener("click", async () => {
+const accountMenuButton = $("#account-menu-button");
+const accountMenu = $("#account-menu");
+function closeAccountMenu(returnFocus = false) {
+  accountMenu.hidden = true;
+  accountMenuButton.setAttribute("aria-expanded", "false");
+  if (returnFocus) accountMenuButton.focus();
+}
+function openAccountMenu() {
+  accountMenu.hidden = false;
+  accountMenuButton.setAttribute("aria-expanded", "true");
+  accountMenu.querySelector('[role="menuitem"]')?.focus();
+}
+accountMenuButton.addEventListener("click", () => {
+  if (accountMenu.hidden) openAccountMenu();
+  else closeAccountMenu(true);
+});
+accountMenu.addEventListener("keydown", (event) => {
+  const items = [...accountMenu.querySelectorAll('[role="menuitem"]')];
+  const index = items.indexOf(document.activeElement);
+  if (event.key === "Escape") {
+    event.preventDefault();
+    closeAccountMenu(true);
+  } else if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+    event.preventDefault();
+    items[(index + (event.key === "ArrowDown" ? 1 : -1) + items.length) % items.length].focus();
+  }
+});
+async function logout() {
   try {
     await api("/auth/logout", { method: "POST" });
+    closeAccountMenu();
     showAuth();
   } catch (error) {
     notify(readableError(error), "error");
   }
-});
+}
 $("#disconnect-form").addEventListener("submit", (event) => {
   event.preventDefault();
   submit(event.currentTarget, "#disconnect-message", async () => {
@@ -609,10 +637,23 @@ $("#refresh-all").addEventListener("click", () => {
   state.widgets.forEach((item) => refreshWidget(item));
 });
 document.addEventListener("click", async (event) => {
+  if (!accountMenu.hidden && !accountMenu.parentElement.contains(event.target))
+    closeAccountMenu();
   const button = event.target.closest("button");
   if (!button || button.disabled) return;
+  if (button.hasAttribute("data-logout")) { await logout(); return; }
   if (button.hasAttribute("data-github-connect")) { await connectGithub(); return; }
-  if (button.hasAttribute("data-github-disconnect")) { $("#disconnect-message").textContent = ""; $("#disconnect-dialog").showModal(); return; }
+  if (button.hasAttribute("data-github-disconnect")) {
+    closeAccountMenu();
+    $("#disconnect-message").textContent = "";
+    $("#disconnect-dialog").showModal();
+    return;
+  }
+  if (button.dataset.accountView) {
+    closeAccountMenu();
+    switchView(button.dataset.accountView);
+    return;
+  }
   if (button.hasAttribute("data-add")) {
     openEditor(null, button.dataset.add || null);
     return;
@@ -622,6 +663,7 @@ document.addEventListener("click", async (event) => {
     return;
   }
   if (button.dataset.view) {
+    closeAccountMenu();
     switchView(button.dataset.view);
     return;
   }
